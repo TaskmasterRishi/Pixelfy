@@ -1,35 +1,41 @@
-import { Text, View, Image, TextInput, Pressable } from "react-native";
+import { Text, View, Image, TextInput } from "react-native";
 import { useEffect, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import Button from "~/src/Components/Button";
+import { uploadImage } from "~/src/lib/cloudinary"; // Adjust path if necessary
 
 export default function CreatePost() {
   const [caption, setCaption] = useState("");
-  const [image, setImage] = useState(null); // Default to null
+  const [image, setImage] = useState(null);
 
   useEffect(() => {
-    if (!image || image == null) {
+    if (!image) {
       pickImage();
     }
-  }, []); // Run only on component mount
+  }, []);
 
   const pickImage = async () => {
-    // No permissions request is necessary for launching the image library
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images", "videos"],
-      allowsEditing: true,
-      // aspect: [4,3],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 1,
     });
 
-    if (!result.canceled && result.assets && result.assets[0].uri) {
+    if (!result.canceled && result.assets?.length > 0) {
       setImage(result.assets[0].uri);
+    }
+  };
+
+  const createPost = async () => {
+    const uploadedImageUrl = await uploadImage(image);
+    if (uploadedImageUrl) {
+      console.log("Post Created with Image:", uploadedImageUrl);
+      // Handle post creation (e.g., save to backend with caption)
     }
   };
 
   return (
     <View className="p-3 items-center flex-1">
-      {/* Image Picker */}
+      {/* Image Preview */}
       {image ? (
         <Image
           source={{ uri: image }}
@@ -44,18 +50,17 @@ export default function CreatePost() {
         Change
       </Text>
 
-      {/* TextInput for caption */}
+      {/* Caption Input */}
       <TextInput
         value={caption}
-        onChangeText={(newValue) => setCaption(newValue)}
+        onChangeText={setCaption}
         placeholder="What's on your mind?"
         className="w-full p-3"
       />
 
-      {/* Button */}
+      {/* Share Button */}
       <View className="mt-auto w-full">
-
-        <Button title="Share"/>
+        <Button title="Share" onPress={createPost} />
       </View>
     </View>
   );

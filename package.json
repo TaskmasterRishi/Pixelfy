@@ -9,6 +9,9 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "@supabase/supabase-js": "^2.48.1",
+    "cloudinary": "^2.5.1",
     "cloudinary-react-native": "^0.0.2",
     "expo": "~52.0.28",
     "expo-constants": "~17.0.5",

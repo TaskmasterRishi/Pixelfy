@@ -10,10 +10,10 @@ import { cld } from '~/src/lib/cloudinary';
 export default function PostListItem({ post }) {
 
     const { width } = useWindowDimensions();
-    console.log(width)
+
     // Post image
     const image = cld.image(post.image);
-    image.resize(thumbnail().width(500).height(500));
+    image.resize(thumbnail().width(1000).height(1000).gravity(focusOn(FocusOn.face())));
 
     // Avatar image
     const avatarImage = cld.image(post.user.avatar_url);

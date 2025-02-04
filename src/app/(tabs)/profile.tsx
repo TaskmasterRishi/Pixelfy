@@ -16,7 +16,7 @@ export default function ProfileScreen() {
       quality: 1,
     });
 
-    if (!result.canceled && result.assets && result.assets[0].uri) {
+    if (!result.canceled) {
       setImage(result.assets[0].uri);
     }
   };
