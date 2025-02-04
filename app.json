@@ -34,6 +34,10 @@
           "photosPermission": "The app accesses your photos to let you share them with your friends."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "supabaseUrl": "https://dkylguaknzyiofcdgphq.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRreWxndWFrbnp5aW9mY2RncGhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg2OTUwNjcsImV4cCI6MjA1NDI3MTA2N30.vJuUBqjZplbP1bvOSjfkXxiEo6D_nlsZAHDLWxOVKdA"
+    }
   }
 }
