@@ -1,18 +1,17 @@
 import { Text, View, Image, TextInput } from "react-native";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import Button from "~/src/Components/Button";
-import { uploadImage } from "~/src/lib/cloudinary"; // Adjust path if necessary
+import { uploadImage } from "~/src/lib/cloudinary";
+import { supabase } from "~/src/lib/supabase";
+import { useAuth } from "~/src/providers/AuthProvider";
+import { router } from "expo-router";
 
 export default function CreatePost() {
   const [caption, setCaption] = useState("");
   const [image, setImage] = useState(null);
 
-  useEffect(() => {
-    if (!image) {
-      pickImage();
-    }
-  }, []);
+  const { session } = useAuth();
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -26,10 +25,31 @@ export default function CreatePost() {
   };
 
   const createPost = async () => {
-    const uploadedImageUrl = await uploadImage(image);
-    if (uploadedImageUrl) {
-      console.log("Post Created with Image:", uploadedImageUrl);
-      // Handle post creation (e.g., save to backend with caption)
+    if (!image) {
+      alert("Please select an image");
+      return;
+    }
+
+    const response = await uploadImage(image);
+
+    if (response) {
+      const postImageUrl = response;
+
+      const { data, error } = await supabase
+        .from("post")
+        .insert([
+          { caption, image: postImageUrl, user_id: session?.user.id },
+        ])
+        .select();
+
+      if (error) {
+        alert("Error creating post");
+      } else {
+        // Pass a refresh flag or callback to trigger a feed refresh
+        router.push("/(tabs)?refresh=true");
+      }
+    } else {
+      alert("Image upload failed, please try again.");
     }
   };
 
@@ -56,6 +76,7 @@ export default function CreatePost() {
         onChangeText={setCaption}
         placeholder="What's on your mind?"
         className="w-full p-3"
+        style={{ height: 100, borderColor: "#ddd", borderWidth: 1, borderRadius: 5 }}
       />
 
       {/* Share Button */}
