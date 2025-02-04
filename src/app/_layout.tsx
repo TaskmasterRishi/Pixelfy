@@ -1,5 +1,10 @@
-import { Slot,Stack,Tabs } from "expo-router";
+import { Slot, Stack, Tabs } from "expo-router";
 import "../../global.css";
-export default function RootLayout(){
-    return <Stack screenOptions={{headerShown: false}}/>;
+import AuthProvider from "../providers/AuthProvider";
+export default function RootLayout() {
+    return (
+        <AuthProvider>
+            <Stack screenOptions={{ headerShown: false }} />
+        </AuthProvider>
+    );
 }

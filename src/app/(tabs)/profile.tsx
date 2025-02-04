@@ -3,10 +3,12 @@ import { useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import Button from "~/src/Components/Button";
+import { supabase } from "~/src/lib/supabase";
 
 export default function ProfileScreen() {
   const [image, setImage] = useState(null); // Default to null
   const [username, setUsername] = useState(null);
+
   const pickImage = async () => {
     // No permissions request is necessary for launching the image library
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -54,7 +56,12 @@ export default function ProfileScreen() {
       {/* Button */}
       <View className="gap-3 w-full mt-auto">
         <Button title="Update Profile" />
-        <Button title="Sign out"></Button>
+        <Button 
+          title="Sign out" 
+          onPress={() => { 
+            supabase.auth.signOut(); // Call the sign out function here
+          }} 
+        />
       </View>
     </View>
   );
