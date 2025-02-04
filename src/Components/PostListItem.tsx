@@ -1,30 +1,39 @@
-import { Text, View, Image, TouchableOpacity } from "react-native";
+import { Text, View, TouchableOpacity, useWindowDimensions } from "react-native";
 import { Ionicons, AntDesign, Feather } from '@expo/vector-icons';
+import { AdvancedImage } from 'cloudinary-react-native';
+import { thumbnail } from "@cloudinary/url-gen/actions/resize";
+import { byRadius } from "@cloudinary/url-gen/actions/roundCorners";
+import { focusOn } from "@cloudinary/url-gen/qualifiers/gravity";
+import { FocusOn } from "@cloudinary/url-gen/qualifiers/focusOn";
+import { cld } from '~/src/lib/cloudinary';
 
-export default function PostListItem(props: { post: any; }) {
-    const { post } = props;
+export default function PostListItem({ post }) {
 
-    if (!post || !post.user) return null; // Return nothing if post data is incomplete
+    const { width } = useWindowDimensions();
+    console.log(width)
+    // Post image
+    const image = cld.image(post.image);
+    image.resize(thumbnail().width(500).height(500));
+
+    // Avatar image
+    const avatarImage = cld.image(post.user.avatar_url);
+    avatarImage.resize(thumbnail().width(48).height(48).gravity(focusOn(FocusOn.face()))).roundCorners(byRadius(50));
 
     return (
-        <View className="bg-white">
+        <View style={{ backgroundColor: 'white' }}>
             {/* Header */}
-            <View className="p-2 flex-row gap-3 items-center">
-                <Image
-                    source={{ uri: post.user.image_url }}
-                    className="w-12 aspect-square rounded-full"
-                />
-                <Text className="text-xl font-semibold text-gray-600">{post.user.username}</Text>
+            <View style={{ padding: 8, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <AdvancedImage cldImg={avatarImage} style={{ width: 48, height: 48, borderRadius: 24 }} />
+                <Text style={{ fontSize: 18, fontWeight: '600', color: 'gray' }}>
+                    {post.user.username}
+                </Text>
             </View>
 
             {/* Post Image */}
-            <Image
-                source={{ uri: post.image_url }}
-                className="w-full aspect-[4/3]"
-            />
+            <AdvancedImage cldImg={image} style={{ width: '100%', aspectRatio: 4 / 3 }} />
 
             {/* Actions */}
-            <View className="flex-row gap-3 p-2 pr-4 pl-4">
+            <View style={{ flexDirection: 'row', gap: 12, padding: 10 }}>
                 <TouchableOpacity>
                     <AntDesign name="hearto" size={20} />
                 </TouchableOpacity>
@@ -34,8 +43,8 @@ export default function PostListItem(props: { post: any; }) {
                 <TouchableOpacity>
                     <Feather name="send" size={20} />
                 </TouchableOpacity>
-    
-                <TouchableOpacity className="ml-auto">
+
+                <TouchableOpacity style={{ marginLeft: 'auto' }}>
                     <Feather name="bookmark" size={20} />
                 </TouchableOpacity>
             </View>
