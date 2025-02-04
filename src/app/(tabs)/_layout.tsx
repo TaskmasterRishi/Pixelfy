@@ -9,6 +9,7 @@ export default function TabLayout() {
                 options={{
                     headerTitle: "For you",
                     headerTitleAlign: "center",
+                    headerTitleStyle: { fontSize: 17 },
                     tabBarIcon: ({ color }) => <FontAwesome name="home" size={26} color={color} />,
                 }}
             />
@@ -18,6 +19,7 @@ export default function TabLayout() {
                 options={{
                     headerTitle: "Create Post",
                     headerTitleAlign: "center",
+                    headerTitleStyle: { fontSize: 17 },
                     tabBarIcon: ({ color }) => <FontAwesome name="plus-square-o" size={26} color={color} />,
                 }}
             />
@@ -27,6 +29,7 @@ export default function TabLayout() {
                 options={{
                     headerTitle: "Profile",
                     headerTitleAlign: "center",
+                    headerTitleStyle: { fontSize: 17 },
                     tabBarIcon: ({ color }) => <FontAwesome name="user" size={26} color={color} />,
                 }}
             />
