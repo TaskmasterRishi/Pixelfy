@@ -11,17 +11,25 @@ export default function CreatePost() {
   const [caption, setCaption] = useState("");
   const [image, setImage] = useState(null);
   const [loading, setLoading] = useState(false); // Loading state for button
+  const [isPageReady, setIsPageReady] = useState(false); // Track if page is ready
 
   const { session } = useAuth();
 
   useEffect(() => {
-    pickImage(); // Open Image Picker on mount
+    // Set page ready to true when component is mounted
+    setIsPageReady(true);
   }, []);
+
+  useEffect(() => {
+    if (isPageReady) {
+      pickImage(); // Open Image Picker after page is ready
+    }
+  }, [isPageReady]); // Only run this when isPageReady changes
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 1,
+      quality: 0.5,
     });
 
     if (!result.canceled && result.assets?.length > 0) {
@@ -44,6 +52,27 @@ export default function CreatePost() {
     if (response) {
       const postImageUrl = response;
 
+      // Ensure user exists in profiles table
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", session?.user.id)
+        .maybeSingle(); // Using maybeSingle to handle multiple or no rows
+
+      if (profileError) {
+        console.log("Profile error:", profileError); // Log the error for debugging
+        alert("Profile not found. Please create a profile first.");
+        setLoading(false); // Stop loading
+        return;
+      }
+
+      if (!profileData) {
+        alert("Profile not found. Please create a profile first.");
+        setLoading(false); // Stop loading
+        return;
+      }
+
+      // Create post in the "post" table
       const { data, error } = await supabase
         .from("post")
         .insert([{ caption, image: postImageUrl, user_id: session?.user.id }])

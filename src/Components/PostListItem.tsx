@@ -1,28 +1,50 @@
 import { Text, View, TouchableOpacity, useWindowDimensions, Image } from "react-native";
 import { Ionicons, AntDesign, Feather } from '@expo/vector-icons';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { useState } from "react";
 
 export default function PostListItem({ post }) {
   const { width } = useWindowDimensions();
 
-  // Default avatar fallback
+  // Default avatar fallback URL
   const DEFAULT_AVATAR = "https://res.cloudinary.com/dbcgxsh5x/image/upload/v1700000000/avatar/default-avatar.png";
 
-  // ✅ Prevent avatar caching by appending a timestamp
-  const avatarUrl = post.profiles.avatar_url
+  // Use state to track if an error occurred loading the avatar
+  const [avatarError, setAvatarError] = useState(false);
+
+  // Determine the avatar URL:
+  // If an avatar exists and no error occurred, append a timestamp to prevent caching;
+  // otherwise, use null to trigger the placeholder.
+  const avatarUrl = post.profiles?.avatar_url && !avatarError
     ? `${post.profiles.avatar_url}?t=${new Date().getTime()}`
-    : DEFAULT_AVATAR;
+    : null;
 
   return (
     <View style={{ backgroundColor: 'white' }}>
       {/* Header */}
       <View style={{ padding: 3, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <Image
-          source={{ uri: avatarUrl }}
-          style={{ width: 36, height: 36, borderRadius: 24 }}
-          onError={(e) => e.target.src = DEFAULT_AVATAR} // Fallback avatar if loading fails
-        />
+        {avatarUrl ? (
+          <Image
+            source={{ uri: avatarUrl }}
+            style={{ width: 36, height: 36, borderRadius: 18 }}
+            onError={() => setAvatarError(true)}
+          />
+        ) : (
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: '#ddd',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <FontAwesome name="user" size={20} color="gray" />
+          </View>
+        )}
         <Text style={{ fontSize: 18, fontWeight: '600', color: 'gray' }}>
-          {post.profiles.username}
+          {post.profiles?.username || "Unknown"}
         </Text>
       </View>
 
@@ -54,7 +76,6 @@ export default function PostListItem({ post }) {
         <TouchableOpacity>
           <Feather name="send" size={20} />
         </TouchableOpacity>
-
         <TouchableOpacity style={{ marginLeft: 'auto' }}>
           <Feather name="bookmark" size={20} />
         </TouchableOpacity>

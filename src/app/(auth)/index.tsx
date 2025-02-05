@@ -3,6 +3,7 @@ import { Alert, StyleSheet, View, TextInput } from 'react-native'
 import { supabase } from '~/src/lib/supabase'
 import Button from '~/src/Components/Button'
 import { useAuth } from '~/src/providers/AuthProvider' // Import useAuth to trigger session update
+import { router } from 'expo-router' // Import router from expo-router for navigation
 
 export default function Auth() {
   const [email, setEmail] = useState('')
@@ -25,6 +26,8 @@ export default function Auth() {
       const { data: { session } } = await supabase.auth.getSession()
       setSession(session)  // Ensure session is updated in context
       console.log("Signin successful!")
+      // Redirect to index (feed) page after successful sign in
+      router.push('/(tabs)/index')
     }
     setLoading(false)
   }
@@ -38,11 +41,21 @@ export default function Auth() {
       email: email,
       password: password,
     })
+
     if (error) {
       Alert.alert(error.message)
-    }
-    if (!session) {
-      Alert.alert('Please check your inbox for email verification!')
+    } else if (!session) {
+      // If no session is returned, alert the user to verify their email
+      Alert.alert(
+        'Sign Up Successful',
+        'Please check your inbox for email verification. Once verified, you will be redirected to your profile.',
+        [{ text: 'OK', onPress: () => router.push('/(tabs)/profile') }]
+      )
+    } else {
+      // On successful sign up (session exists), update the context and redirect to profile
+      setSession(session)
+      console.log("Signup successful!")
+      router.push('/(tabs)/profile')
     }
     setLoading(false)
   }
