@@ -2,9 +2,9 @@ import { Alert, FlatList } from "react-native";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "~/src/lib/supabase";
 import PostListItem from "~/src/Components/PostListItem";
-import { useFocusEffect } from "expo-router"; // Or import from "@react-navigation/native" if you're using that
+import { useFocusEffect } from "expo-router";
 
-// Define the types for the post data and user data
+// Define types
 type Post = {
   id: string;
   caption: string;
@@ -32,21 +32,34 @@ export default function FeedScreen() {
     if (error) {
       Alert.alert("Something went wrong", error.message);
     } else if (data) {
-      // For each post, ensure a fallback for profiles if missing
-      const updatedData = data.map((post) => ({
-        ...post,
-        profiles: post.profiles || { id: "", username: "Unknown", avatar_url: "" },
-      }));
-      setPosts(updatedData);
+      setPosts(
+        data.map((post) => ({
+          ...post,
+          profiles: post.profiles || { id: "", username: "Unknown", avatar_url: "" },
+        }))
+      );
     }
   };
 
-  // Refresh posts and scroll to top when the screen comes into focus
+  // 🔴 Subscribe to profile updates
+  useEffect(() => {
+    const profileSubscription = supabase
+      .channel("public:profiles")
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, (payload) => {
+        console.log("Profile updated:", payload.new);
+        fetchPosts(); // Re-fetch posts when profile updates (e.g., avatar changes)
+      })
+      .subscribe();
+
+    return () => {
+      profileSubscription.unsubscribe();
+    };
+  }, []);
+
+  // 🔄 Refresh feed when screen is focused
   useFocusEffect(
     useCallback(() => {
       fetchPosts();
-      // Wait a moment to ensure posts are loaded, then scroll to top.
-      // You can adjust the timeout if necessary.
       setTimeout(() => {
         flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
       }, 100);

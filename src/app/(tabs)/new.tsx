@@ -1,4 +1,4 @@
-import { Text, View, Image, TextInput } from "react-native";
+import { Text, View, Image, TextInput, ActivityIndicator } from "react-native";
 import { useState, useEffect } from "react";
 import * as ImagePicker from "expo-image-picker";
 import Button from "~/src/Components/Button";
@@ -10,6 +10,7 @@ import { router } from "expo-router";
 export default function CreatePost() {
   const [caption, setCaption] = useState("");
   const [image, setImage] = useState(null);
+  const [loading, setLoading] = useState(false); // Loading state for button
 
   const { session } = useAuth();
 
@@ -36,6 +37,8 @@ export default function CreatePost() {
       return;
     }
 
+    setLoading(true); // Start loading
+
     const response = await uploadImage(image);
 
     if (response) {
@@ -54,6 +57,8 @@ export default function CreatePost() {
     } else {
       alert("Image upload failed, please try again.");
     }
+
+    setLoading(false); // Stop loading
   };
 
   return (
@@ -82,9 +87,13 @@ export default function CreatePost() {
         style={{ height: 100, borderColor: "#ddd", borderWidth: 1, borderRadius: 5 }}
       />
 
-      {/* Share Button */}
+      {/* Share Button with Loading */}
       <View className="mt-auto w-full">
-        <Button title="Share" onPress={createPost} />
+        {loading ? (
+          <ActivityIndicator size="large" color="#0000ff" />
+        ) : (
+          <Button title="Share" onPress={createPost} />
+        )}
       </View>
     </View>
   );
