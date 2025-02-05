@@ -1,5 +1,5 @@
 import { Text, View, Image, TextInput } from "react-native";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import * as ImagePicker from "expo-image-picker";
 import Button from "~/src/Components/Button";
 import { uploadImage } from "~/src/lib/cloudinary";
@@ -13,6 +13,10 @@ export default function CreatePost() {
 
   const { session } = useAuth();
 
+  useEffect(() => {
+    pickImage(); // Open Image Picker on mount
+  }, []);
+
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -21,6 +25,8 @@ export default function CreatePost() {
 
     if (!result.canceled && result.assets?.length > 0) {
       setImage(result.assets[0].uri);
+    } else {
+      router.back(); // Go back if no image is selected
     }
   };
 
@@ -37,15 +43,12 @@ export default function CreatePost() {
 
       const { data, error } = await supabase
         .from("post")
-        .insert([
-          { caption, image: postImageUrl, user_id: session?.user.id },
-        ])
+        .insert([{ caption, image: postImageUrl, user_id: session?.user.id }])
         .select();
 
       if (error) {
         alert("Error creating post");
       } else {
-        // Pass a refresh flag or callback to trigger a feed refresh
         router.push("/(tabs)?refresh=true");
       }
     } else {

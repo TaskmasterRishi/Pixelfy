@@ -1,17 +1,16 @@
-// cloudinary.js
 import { Cloudinary } from "@cloudinary/url-gen";
 
 export const cld = new Cloudinary({
   cloud: {
-    cloudName: 'dbcgxsh5x',
+    cloudName: 'dbcgxsh5x', // Your Cloudinary cloud name
   },
 });
 
-export const uploadImage = async (imageUri) => {
+export const uploadImage = async (imageUri, folder = "") => {
   const UPLOAD_PRESET = "Default"; // Replace with your actual upload preset
 
-  // Dynamically determine file type
-  const fileType = imageUri.split('.').pop();  // Extract file extension
+  // Determine file type dynamically
+  const fileType = imageUri.split('.').pop();
   const mimeType = fileType === "jpg" || fileType === "jpeg" ? "image/jpeg" : `image/${fileType}`;
 
   const data = new FormData();
@@ -21,10 +20,11 @@ export const uploadImage = async (imageUri) => {
     name: `upload.${fileType}`,
   });
   data.append("upload_preset", UPLOAD_PRESET);
+  data.append("folder", folder); // Upload inside the specified folder
 
   try {
     let response = await fetch(
-      `https://api.cloudinary.com/v1_1/${process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+      `https://api.cloudinary.com/v1_1/dbcgxsh5x/image/upload`, // Use your Cloudinary cloud name
       {
         method: "POST",
         body: data,
@@ -40,6 +40,11 @@ export const uploadImage = async (imageUri) => {
     return result.secure_url;
   } catch (error) {
     console.error("Cloudinary Upload Error:", error.message);
-    return null; // Return null to indicate failure
+    return null;
   }
+};
+
+// ✅ New method to upload avatar to 'avatar' folder
+export const uploadAvatar = async (imageUri) => {
+  return uploadImage(imageUri, "avatar"); // Upload avatar images to 'avatar' folder
 };

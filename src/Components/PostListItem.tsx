@@ -1,13 +1,18 @@
+import { useState } from "react";
 import { Text, View, TouchableOpacity, useWindowDimensions, Image } from "react-native";
 import { Ionicons, AntDesign, Feather } from '@expo/vector-icons';
-import { cld } from '~/src/lib/cloudinary';
 
 export default function PostListItem({ post }) {
   const { width } = useWindowDimensions();
+  
+  // Default avatar fallback
+  const DEFAULT_AVATAR = "https://res.cloudinary.com/dbcgxsh5x/image/upload/v1700000000/avatar/default-avatar.png";
+  
+  // State to track avatar URL
+  const [avatarUrl, setAvatarUrl] = useState(
+    post.profiles.avatar_url ? post.profiles.avatar_url : DEFAULT_AVATAR
+  );
 
-  // Ensure full URL for avatar image
-  const avatarUrl = `https://res.cloudinary.com/dbcgxsh5x/image/upload/${post.profiles.avatar_url}`;
-  console.log("Avatar Image URL:", avatarUrl);
 
   return (
     <View style={{ backgroundColor: 'white' }}>
@@ -16,6 +21,7 @@ export default function PostListItem({ post }) {
         <Image
           source={{ uri: avatarUrl }}
           style={{ width: 36, height: 36, borderRadius: 24 }}
+          onError={() => setAvatarUrl(DEFAULT_AVATAR)} // Set fallback avatar if loading fails
         />
         <Text style={{ fontSize: 18, fontWeight: '600', color: 'gray' }}>
           {post.profiles.username}
@@ -24,13 +30,13 @@ export default function PostListItem({ post }) {
 
       {/* Post Image */}
       <Image
-        source={{ uri: post.image }} // Directly use the full image URL from Cloudinary
+        source={{ uri: post.image }} // Directly use Cloudinary post image URL
         style={{
           width: '100%',
           height: width,
           aspectRatio: 1,
         }}
-        onError={() => console.log("Error loading image.")}
+        onError={() => console.log("Error loading post image.")}
       />
 
       {/* Caption */}

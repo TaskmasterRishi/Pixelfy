@@ -7,13 +7,13 @@ type Auth = {
   isAuthenticated: boolean;
   session: Session | null;
   user?: User;
-  setSession: (session: Session | null) => void; // Add setSession function
+  setSession: (session: Session | null) => void;
 };
 
 const AuthContext = createContext<Auth>({
   isAuthenticated: false,
   session: null,
-  setSession: () => {}, // Initialize with a no-op function
+  setSession: () => {},
 });
 
 export default function AuthProvider({ children }: any) {
@@ -31,7 +31,9 @@ export default function AuthProvider({ children }: any) {
     });
 
     return () => {
-      listener?.unsubscribe();
+      if (listener && typeof listener.subscription?.unsubscribe === "function") {
+        listener.subscription.unsubscribe();
+      }
     };
   }, []);
 
@@ -39,12 +41,8 @@ export default function AuthProvider({ children }: any) {
     return <ActivityIndicator />;
   }
 
-  const setSession = (session: Session | null) => {
-    setSessionState(session); // Update session in state
-  };
-
   return (
-    <AuthContext.Provider value={{ session, user: session?.user, isAuthenticated: !!session?.user, setSession }}>
+    <AuthContext.Provider value={{ session, user: session?.user, isAuthenticated: !!session?.user, setSession: setSessionState }}>
       {children}
     </AuthContext.Provider>
   );
