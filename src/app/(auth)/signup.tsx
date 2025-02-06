@@ -1,13 +1,14 @@
-// src/app/(auth)/index.tsx
+// src/app/(auth)/signup.tsx
 import React, { useState } from 'react';
-import { View, Text, ActivityIndicator, Alert, TouchableOpacity, TextInput } from 'react-native';
-import { signIn, signInWithGoogle } from '~/src/services/authService'; // Import the service functions
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { signUp } from '~/src/services/authService'; // Import the signUp service
 import Button from '~/src/Components/Button';
 import { useAuth } from '~/src/providers/AuthProvider';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import '~/global.css';
 
-export default function SignIn() {
+export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,33 +16,29 @@ export default function SignIn() {
   const [error, setError] = useState('');
   const { setSession } = useAuth();
 
-  async function handleSignIn() {
+  async function signUpWithEmail() {
     setError('');
     setLoading(true);
 
     try {
-      const { session, error } = await signIn(email, password); // Use the signIn service
+      const { session } = await signUp(email, password); // Use the signUp service
 
-      if (error) {
-        setError(error.message);
-        Alert.alert('Sign In Error', error.message);
-        return;
+      if (session) {
+        setSession(session); // Set the session in context
+        router.push('/(tabs)/profile'); // Redirect to profile
+      } else {
+        Alert.alert(
+          'Verify Your Email',
+          'A confirmation link has been sent to your email address. Please verify to continue.',
+          [{ text: 'OK', onPress: () => router.push('/(tabs)/profile') }]
+        );
       }
-
-      setSession(session);
-      router.replace('../(tabs)/');
     } catch (err) {
-      setError('An unexpected error occurred. Please try again.');
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      setError(err.message); // Set error message
+      Alert.alert('Signup Error', err.message); // Show alert
     } finally {
       setLoading(false);
     }
-  }
-
-  async function handleGoogleSignIn() {
-    const { error } = await signInWithGoogle(); // Use the Google sign-in service
-
-    if (error) Alert.alert('Google Sign-In Error', error.message);
   }
 
   return (
@@ -50,10 +47,10 @@ export default function SignIn() {
         {/* Logo Section */}
         <View className="items-center mb-12">
           <Text className="text-6xl text-blue-600 mb-2 font-bold">Pixelfy</Text>
-          <Text className="text-gray-600 text-lg">Welcome Back!</Text>
+          <Text className="text-gray-600 text-lg">Join Our Creative Community</Text>
         </View>
 
-        {/* Sign-in Form */}
+        {/* Signup Form */}
         <View className="bg-white rounded-2xl p-6 shadow-md">
           {/* Email Input */}
           <View className="mb-6">
@@ -75,7 +72,7 @@ export default function SignIn() {
 
           {/* Password Input */}
           <View className="mb-8">
-            <Text className="text-gray-700 mb-2 font-medium">Password</Text>
+            <Text className="text-gray-700 mb-2 font-medium">Create Password</Text>
             <View className="flex-row items-center border border-gray-200 rounded-lg px-4 bg-gray-50">
               <Ionicons name="lock-closed-outline" size={20} color="#6B7280" />
               <TextInput
@@ -84,7 +81,7 @@ export default function SignIn() {
                 placeholderTextColor="#9CA3AF"
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry={!showPassword}
+                secureTextEntry={!showPassword} // This should be a boolean
                 autoCapitalize="none"
                 accessibilityLabel="Password"
               />
@@ -110,12 +107,12 @@ export default function SignIn() {
             </View>
           )}
 
-          {/* Sign In Button */}
+          {/* Sign Up Button */}
           <Button
-            title={loading ? 'Signing In...' : 'Sign In'}
-            onPress={handleSignIn}
+            title={loading ? 'Creating Account...' : 'Create Account'}
+            onPress={signUpWithEmail}
             disabled={loading}
-            className="w-full bg-blue-600 py-4 rounded-lg"
+            className="w-full bg-blue-600 py-4 rounded-lg flex-row justify-center items-center"
             textClassName="text-white font-semibold text-base"
             icon={loading && <ActivityIndicator color="white" className="mr-2" />}
           />
@@ -124,11 +121,11 @@ export default function SignIn() {
         {/* Divider */}
         <View className="flex-row items-center my-8">
           <View className="flex-1 h-px bg-gray-200" />
-          <Text className="text-gray-500 px-4">Or continue with</Text>
+          <Text className="text-gray-500 px-4">Or sign up with</Text>
           <View className="flex-1 h-px bg-gray-200" />
         </View>
 
-        {/* Google Sign-In */}
+        {/* Google Sign-Up */}
         <TouchableOpacity className="w-full flex-row items-center justify-center border bg-white shadow-md border-gray-200 rounded-lg py-4">
           <Ionicons name="logo-google" size={20} color="#DB4437" />
           <Text className="text-gray-700 font-medium ml-2">Continue with Google</Text>
@@ -136,9 +133,9 @@ export default function SignIn() {
 
         {/* Footer Links */}
         <View className="flex-row justify-center mt-8">
-          <Text className="text-gray-600">New to Pixelfy? </Text>
-          <TouchableOpacity onPress={() => router.push('/signup')}>
-            <Text className="text-blue-600 font-medium">Create account</Text>
+          <Text className="text-gray-600">Already have an account? </Text>
+          <TouchableOpacity onPress={() => router.push('/')}>
+            <Text className="text-blue-600 font-medium">Sign in</Text>
           </TouchableOpacity>
         </View>
       </View>

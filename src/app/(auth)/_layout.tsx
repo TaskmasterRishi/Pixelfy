@@ -10,9 +10,14 @@ export default function AuthLayout() {
   useEffect(() => {
     if (isAuthenticated) {
       // Redirect using the router object when authenticated
-      router.push('/(tabs)'); // Use router.push for redirection
+      // router.push('/(tabs)'); // Use router.push for redirection
     }
   }, [isAuthenticated, router]); // Ensure router is included as a dependency
 
-  return <Stack />;
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="signup" />
+    </Stack>
+  );
 }

@@ -1,44 +1,42 @@
+// src/providers/AuthProvider.tsx
 import React, { useState, createContext, useContext, useEffect } from 'react';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator, Alert } from 'react-native';
 import { supabase } from '~/src/lib/supabase';
 import { Session, User } from '@supabase/supabase-js';
 
-type Auth = {
+type AuthContextType = {
   isAuthenticated: boolean;
   session: Session | null;
   user?: User;
   setSession: (session: Session | null) => void;
 };
 
-const AuthContext = createContext<Auth>({
-  isAuthenticated: false,
-  session: null,
-  setSession: () => {},
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export default function AuthProvider({ children }: any) {
+export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSessionState] = useState<Session | null>(null);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const fetchSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       setSessionState(session);
       setIsReady(true);
-    });
+    };
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    fetchSession();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {
       setSessionState(session);
     });
 
     return () => {
-      if (listener && typeof listener.subscription?.unsubscribe === "function") {
-        listener.subscription.unsubscribe();
-      }
+      listener.subscription.unsubscribe();
     };
   }, []);
 
   if (!isReady) {
-    return <ActivityIndicator />;
+    return <ActivityIndicator size="large" color="#007bff" />;
   }
 
   return (
@@ -48,4 +46,10 @@ export default function AuthProvider({ children }: any) {
   );
 }
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+};
