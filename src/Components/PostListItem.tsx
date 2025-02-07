@@ -1,85 +1,88 @@
 import { Text, View, TouchableOpacity, useWindowDimensions, Image } from "react-native";
-import { Ionicons, AntDesign, Feather } from '@expo/vector-icons';
+import { Ionicons, AntDesign, Feather, Entypo } from '@expo/vector-icons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState } from "react";
+import { formatDistanceToNow } from "date-fns";
 
 export default function PostListItem({ post }) {
   const { width } = useWindowDimensions();
-
-  // Default avatar fallback URL
-  const DEFAULT_AVATAR = "https://res.cloudinary.com/dbcgxsh5x/image/upload/v1700000000/avatar/default-avatar.png";
-
-  // Use state to track if an error occurred loading the avatar
   const [avatarError, setAvatarError] = useState(false);
+  const [liked, setLiked] = useState(false);
 
-  // Determine the avatar URL:
-  // If an avatar exists and no error occurred, append a timestamp to prevent caching;
-  // otherwise, use null to trigger the placeholder.
   const avatarUrl = post.profiles?.avatar_url && !avatarError
     ? `${post.profiles.avatar_url}?t=${new Date().getTime()}`
     : null;
 
+  // Format the timeUpload field
+  const timeAgo = post.timeUpload 
+    ? formatDistanceToNow(new Date(post.timeUpload), { addSuffix: true }) 
+    : "Just now";
+
   return (
-    <View style={{ backgroundColor: 'white' }}>
+    <View className="bg-white mb-4">
       {/* Header */}
-      <View style={{ padding: 3, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        {avatarUrl ? (
-          <Image
-            source={{ uri: avatarUrl }}
-            style={{ width: 36, height: 36, borderRadius: 18 }}
-            onError={() => setAvatarError(true)}
-          />
-        ) : (
-          <View
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              backgroundColor: '#ddd',
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <FontAwesome name="user" size={20} color="gray" />
+      <View className="px-4 py-2 flex-row items-center justify-between">
+        <View className="flex-row items-center gap-3">
+          {avatarUrl ? (
+            <Image
+              source={{ uri: avatarUrl }}
+              className="w-10 h-10 rounded-full border border-gray-300"
+              onError={() => setAvatarError(true)}
+            />
+          ) : (
+            <View className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center">
+              <FontAwesome name="user" size={20} color="gray" />
+            </View>
+          )}
+          <View>
+            <Text className="text-sm font-semibold text-gray-900">
+              {post.profiles?.username || "Unknown"}
+            </Text>
+            <Text className="text-xs text-gray-500">{timeAgo}</Text> 
           </View>
-        )}
-        <Text style={{ fontSize: 18, fontWeight: '600', color: 'gray' }}>
-          {post.profiles?.username || "Unknown"}
-        </Text>
+        </View>
+        <TouchableOpacity>
+          <Entypo name="dots-three-horizontal" size={18} color="black" />
+        </TouchableOpacity>
       </View>
 
       {/* Post Image */}
       <Image
-        source={{ uri: post.image }} // Directly use Cloudinary post image URL
-        style={{
-          width: width,
-          height: width,
-          aspectRatio: 1,
-        }}
+        source={{ uri: post.image }}
+        className="w-full"
+        style={{ height: width, aspectRatio: 1, borderRadius: 0 }}
       />
+
+      {/* Actions */}
+      <View className="flex-row items-center justify-between px-4 py-2">
+        <View className="flex-row gap-4">
+          <TouchableOpacity onPress={() => setLiked(!liked)}>
+            <AntDesign name={liked ? "heart" : "hearto"} size={24} color={liked ? "red" : "black"} />
+          </TouchableOpacity>
+          <TouchableOpacity>
+            <Ionicons name="chatbubble-outline" size={24} color="black" />
+          </TouchableOpacity>
+          <TouchableOpacity>
+            <Feather name="send" size={24} color="black" />
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity>
+          <Feather name="bookmark" size={24} color="black" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Like Count */}
+      <Text className="px-4 text-sm font-semibold">
+        {liked ? "Liked by you and others" : "Be the first to like"}
+      </Text>
 
       {/* Caption */}
       {post.caption && (
-        <Text style={{ padding: 8, fontSize: 16, color: 'gray' }}>
+        <Text className="px-4 py-1 text-sm">
+          <Text className="font-semibold">{post.profiles?.username || "Unknown"} </Text>
           {post.caption}
         </Text>
       )}
-
-      {/* Actions */}
-      <View style={{ flexDirection: 'row', gap: 12, padding: 3 }}>
-        <TouchableOpacity>
-          <AntDesign name="hearto" size={20} />
-        </TouchableOpacity>
-        <TouchableOpacity>
-          <Ionicons name="chatbubble-outline" size={20} />
-        </TouchableOpacity>
-        <TouchableOpacity>
-          <Feather name="send" size={20} />
-        </TouchableOpacity>
-        <TouchableOpacity style={{ marginLeft: 'auto' }}>
-          <Feather name="bookmark" size={20} />
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }

@@ -16,7 +16,11 @@ export default function TabLayout() {
     }, [isAuthenticated, router]); // Dependency on isAuthenticated and router
 
     return (
-        <Tabs screenOptions={{ tabBarActiveTintColor: "blue", tabBarShowLabel: false }}>
+        <Tabs screenOptions={{
+            tabBarActiveTintColor: "blue",
+            tabBarShowLabel: false,
+            // headerShown: false
+        }}>
             <Tabs.Screen
                 name="index"
                 options={{
