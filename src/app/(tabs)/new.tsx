@@ -1,129 +1,177 @@
-import { Text, View, Image, TextInput, ActivityIndicator } from "react-native";
-import { useState, useEffect } from "react";
+import { Text, View, Image, TextInput, ActivityIndicator, TouchableOpacity, ScrollView, Dimensions } from "react-native";
+import { useState } from "react";
 import * as ImagePicker from "expo-image-picker";
-import Button from "~/src/Components/Button";
 import { uploadImage } from "~/src/lib/cloudinary";
 import { supabase } from "~/src/lib/supabase";
 import { useAuth } from "~/src/providers/AuthProvider";
 import { router } from "expo-router";
 
+const { width, height } = Dimensions.get("window");
+
+const filters = [
+  { name: "Original", transformation: "" },
+  { name: "Enhance", transformation: "e_improve" },
+  { name: "Grayscale", transformation: "e_grayscale" },
+  { name: "Sepia", transformation: "e_sepia" },
+  { name: "Brightness", transformation: "e_brightness:50" },
+  { name: "Contrast", transformation: "e_contrast:50" },
+  { name: "Vignette", transformation: "e_vignette:80" },
+  { name: "Blur", transformation: "e_blur:200" },
+  { name: "Sharpen", transformation: "e_sharpen:100" },
+  { name: "Pixelate", transformation: "e_pixelate:10" },
+  { name: "Cartoonify", transformation: "e_cartoonify" },
+  { name: "Oil Paint", transformation: "e_oil_paint" },
+  { name: "Artistic Zorro", transformation: "e_art:zorro" },
+  { name: "Artistic Athena", transformation: "e_art:athena" },
+  { name: "Auto Color", transformation: "e_auto_color" },
+  { name: "Auto Contrast", transformation: "e_auto_contrast" },
+  { name: "Auto Brightness", transformation: "e_auto_brightness" },
+  { name: "Hue Adjustment", transformation: "e_hue:50" },
+  { name: "Saturation Boost", transformation: "e_saturation:50" },
+  { name: "Gamma Correction", transformation: "e_gamma:50" },
+];
+
+
 export default function CreatePost() {
   const [caption, setCaption] = useState("");
   const [image, setImage] = useState(null);
-  const [loading, setLoading] = useState(false); // Loading state for button
-  const [isPageReady, setIsPageReady] = useState(false); // Track if page is ready
-
+  const [filteredImage, setFilteredImage] = useState(null);
+  const [loading, setLoading] = useState(false);
   const { session } = useAuth();
-
-  useEffect(() => {
-    // Set page ready to true when component is mounted
-    setIsPageReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (isPageReady) {
-      pickImage(); // Open Image Picker after page is ready
-    }
-  }, [isPageReady]); // Only run this when isPageReady changes
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.5,
+      quality: 0.8,
     });
 
     if (!result.canceled && result.assets?.length > 0) {
-      setImage(result.assets[0].uri);
+      const selectedImage = result.assets[0].uri;
+      setImage(selectedImage);
+      setFilteredImage(selectedImage);
+      await uploadAndSetImage(selectedImage);
     } else {
-      router.back(); // Go back if no image is selected
+      router.back();
     }
   };
 
-  const createPost = async () => {
-    if (!image) {
-      alert("Please select an image");
-      return;
-    }
-
-    setLoading(true); // Start loading
-
-    const response = await uploadImage(image);
+  const uploadAndSetImage = async (selectedImage) => {
+    setLoading(true);
+    const response = await uploadImage(selectedImage);
 
     if (response) {
-      const postImageUrl = response;
-
-      // Ensure user exists in profiles table
-      const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("id", session?.user.id)
-        .maybeSingle(); // Using maybeSingle to handle multiple or no rows
-
-      if (profileError) {
-        console.log("Profile error:", profileError); // Log the error for debugging
-        alert("Profile not found. Please create a profile first.");
-        setLoading(false); // Stop loading
-        return;
-      }
-
-      if (!profileData) {
-        alert("Profile not found. Please create a profile first.");
-        setLoading(false); // Stop loading
-        return;
-      }
-
-      // Create post in the "post" table
-      const { data, error } = await supabase
-        .from("post")
-        .insert([{ caption, image: postImageUrl, user_id: session?.user.id }])
-        .select();
-
-      if (error) {
-        alert("Error creating post");
-      } else {
-        router.push("/(tabs)?refresh=true");
-      }
+      setImage(response);
+      setFilteredImage(response);
     } else {
       alert("Image upload failed, please try again.");
     }
 
-    setLoading(false); // Stop loading
+    setLoading(false);
+  };
+
+  const applyFilter = (transformation) => {
+    if (!image) return;
+
+    if (transformation === "") {
+      setFilteredImage(image);
+    } else {
+      const filteredUrl = image.replace("/upload/", `/upload/${transformation}/`);
+      setFilteredImage(filteredUrl);
+    }
+  };
+
+  const createPost = async () => {
+    if (!filteredImage) {
+      alert("Please select an image first.");
+      return;
+    }
+
+    setLoading(true);
+
+    const { data: profileData, error: profileError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", session?.user.id)
+      .maybeSingle();
+
+    if (profileError || !profileData) {
+      alert("Profile not found. Please create a profile first.");
+      setLoading(false);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("post")
+      .insert([{ caption, image: filteredImage, user_id: session?.user.id }]);
+
+    if (error) {
+      alert("Error creating post");
+    } else {
+      router.push("/(tabs)?refresh=true");
+    }
+
+    setLoading(false);
   };
 
   return (
-    <View className="p-3 items-center flex-1">
+    <View className="flex-1 bg-white">
       {/* Image Preview */}
-      {image ? (
-        <Image
-          source={{ uri: image }}
-          className="w-60 aspect-[3/4] rounded-xl shadow-black bg-slate-300"
-        />
-      ) : (
-        <View className="w-60 aspect-[3/4] rounded-xl shadow-black bg-slate-300" />
-      )}
+      <TouchableOpacity onPress={pickImage} className="flex-1 justify-center items-center">
+        {filteredImage ? (
+          <Image
+            source={{ uri: filteredImage }}
+            className="w-full"
+            style={{ height: height * 0.7 }}
+            resizeMode="contain"
+          />
+        ) : (
+          <Text className="text-gray-500 text-lg">Select Image</Text>
+        )}
+      </TouchableOpacity>
 
-      {/* Change Button */}
-      <Text onPress={pickImage} className="text-blue-500 font-semibold m-5">
-        Change
-      </Text>
+      {/* Filter Previews */}
+      {filteredImage && (
+        <View className="w-full mt-2">
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="p-3">
+            {filters.map((filter) => {
+              const previewUrl =
+                filter.transformation === ""
+                  ? image
+                  : image.replace("/upload/", `/upload/${filter.transformation}/`);
+
+              return (
+                <TouchableOpacity key={filter.name} onPress={() => applyFilter(filter.transformation)} className="mx-2">
+                  <Image
+                    source={{ uri: previewUrl }}
+                    className={`w-20 h-20 rounded-xl ${filteredImage === previewUrl ? "border-2 border-blue-500" : ""}`}
+                    resizeMode="cover"
+                  />
+                  <Text className="text-gray-700 text-xs text-center mt-1">{filter.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Caption Input */}
       <TextInput
         value={caption}
         onChangeText={setCaption}
-        placeholder="What's on your mind?"
-        className="w-full p-3"
-        style={{ height: 100, borderColor: "#ddd", borderWidth: 1, borderRadius: 5 }}
+        placeholder="Write a caption..."
+        placeholderTextColor="#555"
+        className="mt-4 mx-4 p-3 bg-gray-100 text-black rounded-lg"
+        style={{ borderColor: "#ddd", borderWidth: 1 }}
       />
 
-      {/* Share Button with Loading */}
-      <View className="mt-auto w-full">
+      {/* Share Button */}
+      <TouchableOpacity onPress={createPost} className="mt-4 mx-4 bg-blue-500 p-3 rounded-lg items-center">
         {loading ? (
-          <ActivityIndicator size="large" color="#0000ff" />
+          <ActivityIndicator size="small" color="#fff" />
         ) : (
-          <Button title="Share" onPress={createPost} />
+          <Text className="text-white font-semibold text-lg">Share</Text>
         )}
-      </View>
+      </TouchableOpacity>
     </View>
   );
 }

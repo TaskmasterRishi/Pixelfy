@@ -1,84 +1,82 @@
-import { Alert, FlatList } from "react-native";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { View, Text, FlatList, ActivityIndicator, Alert, RefreshControl } from "react-native";
 import { supabase } from "~/src/lib/supabase";
-import PostListItem from "~/src/Components/PostListItem";
 import { useFocusEffect } from "expo-router";
+import PostListItem from "~/src/Components/PostListItem";
 
-// Define types
-type Post = {
-  id: string;
-  caption: string;
-  image: string;
-  user_id: string;
-  created_at: string;
-  updated_at: string;
-  profiles: {
-    id: string;
-    username: string;
-    avatar_url: string;
-  };
-};
+const PAGE_SIZE = 10;
 
 export default function FeedScreen() {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const flatListRef = useRef<FlatList>(null);
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(0);
 
-  const fetchPosts = async () => {
+  // Fetch posts from Supabase
+  const fetchPosts = async (reset = false) => {
+    setLoading(true);
+
     const { data, error } = await supabase
       .from("post")
       .select("*, profiles(id, username, avatar_url)")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(reset ? 0 : page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
     if (error) {
-      Alert.alert("Something went wrong", error.message);
-    } else if (data) {
-      setPosts(
-        data.map((post) => ({
-          ...post,
-          profiles: post.profiles || { id: "", username: "Unknown", avatar_url: "" },
-        }))
-      );
+      Alert.alert("Error", error.message);
+      console.error("Supabase Fetch Error:", error);
+      setLoading(false);
+      return;
     }
+
+    if (!Array.isArray(data)) {
+      console.error("Unexpected data structure:", data);
+      setLoading(false);
+      return;
+    }
+
+    // Remove duplicates
+    setPosts((prev) => {
+      const newPosts = reset ? data : [...prev, ...data];
+      const uniquePosts = Array.from(new Map(newPosts.map((post) => [post.id, post])).values());
+      return uniquePosts;
+    });
+
+    setPage(reset ? 1 : page + 1);
+    setLoading(false);
   };
 
-  // 🔴 Subscribe to profile updates
-  useEffect(() => {
-    const profileSubscription = supabase
-      .channel("public:profiles")
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, (payload) => {
-        console.log("Profile updated:", payload.new);
-        fetchPosts(); // Re-fetch posts when profile updates (e.g., avatar changes)
-      })
-      .subscribe();
-
-    return () => {
-      profileSubscription.unsubscribe();
-    };
-  }, []);
-
-  // 🔄 Refresh feed when screen is focused
+  // Fetch on focus
   useFocusEffect(
     useCallback(() => {
-      fetchPosts();
-      setTimeout(() => {
-        flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
-      }, 100);
+      fetchPosts(true);
     }, [])
   );
 
+  // Pull to refresh
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchPosts(true);
+    setRefreshing(false);
+  };
+
   return (
-    <FlatList
-      ref={flatListRef}
-      data={posts}
-      renderItem={({ item }) => <PostListItem post={item} />}
-      keyExtractor={(item) => item.id.toString()}
-      contentContainerStyle={{
-        gap: 10,
-        maxWidth: 512,
-        alignSelf: "center",
-        width: "100%",
-      }}
-      showsVerticalScrollIndicator={false}
-    />
+    <View className="flex-1 bg-gray-100">
+      {loading && posts.length === 0 ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#000" />
+        </View>
+      ) : (
+        <FlatList
+          data={posts}
+          keyExtractor={(item, index) => (item.id ? item.id.toString() : `post-${index}`)}
+          renderItem={({ item }) => <PostListItem post={item} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          onEndReached={() => fetchPosts(false)}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={loading ? <ActivityIndicator size="small" color="#000" /> : null}
+        />
+      )}
+    </View>
   );
 }
