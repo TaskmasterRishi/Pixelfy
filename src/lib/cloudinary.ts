@@ -53,3 +53,29 @@ export const uploadImage = async (imageUri, folder = "") => {
 export const uploadAvatar = async (imageUri) => {
   return uploadImage(imageUri, "avatar"); // Upload avatar images to 'avatar' folder
 };
+
+export const deleteImage = async (publicId) => {
+  try {
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/image/destroy`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          public_id: publicId,
+          api_key: YOUR_API_KEY,
+          timestamp: Math.floor(Date.now() / 1000),
+          signature: generateSignature(publicId), // Generate signature using your secret
+        }),
+      }
+    );
+
+    const data = await response.json();
+    return data.result === "ok";
+  } catch (error) {
+    console.error("Error deleting image:", error);
+    return false;
+  }
+};

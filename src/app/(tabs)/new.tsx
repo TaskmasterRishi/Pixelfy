@@ -1,10 +1,11 @@
 import { Text, View, Image, TextInput, ActivityIndicator, TouchableOpacity, ScrollView, Dimensions } from "react-native";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import * as ImagePicker from "expo-image-picker";
-import { uploadImage } from "~/src/lib/cloudinary";
+import { uploadImage, deleteImage } from "~/src/lib/cloudinary";
 import { supabase } from "~/src/lib/supabase";
 import { useAuth } from "~/src/providers/AuthProvider";
 import { router } from "expo-router";
+import { Ionicons } from '@expo/vector-icons';
 
 const { width, height } = Dimensions.get("window");
 
@@ -31,12 +32,12 @@ const filters = [
   { name: "Gamma Correction", transformation: "e_gamma:50" },
 ];
 
-
 export default function CreatePost() {
   const [caption, setCaption] = useState("");
   const [image, setImage] = useState(null);
   const [filteredImage, setFilteredImage] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState(null);
   const { session } = useAuth();
 
   const pickImage = async () => {
@@ -50,8 +51,6 @@ export default function CreatePost() {
       setImage(selectedImage);
       setFilteredImage(selectedImage);
       await uploadAndSetImage(selectedImage);
-    } else {
-      router.back();
     }
   };
 
@@ -62,6 +61,7 @@ export default function CreatePost() {
     if (response) {
       setImage(response);
       setFilteredImage(response);
+      setUploadedImageUrl(response);
     } else {
       alert("Image upload failed, please try again.");
     }
@@ -113,40 +113,68 @@ export default function CreatePost() {
     setLoading(false);
   };
 
+  useEffect(() => {
+    return () => {
+      if (uploadedImageUrl) {
+        deleteImage(uploadedImageUrl);
+      }
+    };
+  }, [uploadedImageUrl]);
+
   return (
     <View className="flex-1 bg-white">
       {/* Image Preview */}
-      <TouchableOpacity onPress={pickImage} className="flex-1 justify-center items-center">
+      <TouchableOpacity 
+        onPress={pickImage} 
+        className="flex-1 justify-center items-center bg-gray-50"
+      >
         {filteredImage ? (
           <Image
             source={{ uri: filteredImage }}
             className="w-full"
-            style={{ height: height * 0.7 }}
+            style={{ height: height * 0.6 }}
             resizeMode="contain"
           />
         ) : (
-          <Text className="text-gray-500 text-lg">Select Image</Text>
+          <View className="items-center">
+            <Ionicons 
+              name="image-outline" 
+              size={64} 
+              color="#999" 
+              className="mb-4"
+            />
+            <Text className="text-gray-500 text-lg font-medium">Tap to select an image</Text>
+          </View>
         )}
       </TouchableOpacity>
 
       {/* Filter Previews */}
       {filteredImage && (
-        <View className="w-full mt-2">
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="p-3">
+        <View className="w-full bg-gray-50 py-3">
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="px-3">
             {filters.map((filter) => {
-              const previewUrl =
-                filter.transformation === ""
-                  ? image
-                  : image.replace("/upload/", `/upload/${filter.transformation}/`);
+              const previewUrl = filter.transformation === ""
+                ? image
+                : image.replace("/upload/", `/upload/${filter.transformation}/`);
 
               return (
-                <TouchableOpacity key={filter.name} onPress={() => applyFilter(filter.transformation)} className="mx-2">
+                <TouchableOpacity 
+                  key={filter.name} 
+                  onPress={() => applyFilter(filter.transformation)} 
+                  className="mx-1.5"
+                >
                   <Image
                     source={{ uri: previewUrl }}
-                    className={`w-20 h-20 rounded-xl ${filteredImage === previewUrl ? "border-2 border-blue-500" : ""}`}
+                    className={`w-16 h-16 rounded-lg ${
+                      filteredImage === previewUrl 
+                        ? "border-3 border-blue-500" 
+                        : "border border-gray-200"
+                    }`}
                     resizeMode="cover"
                   />
-                  <Text className="text-gray-700 text-xs text-center mt-1">{filter.name}</Text>
+                  <Text className="text-gray-700 text-xs text-center mt-1 font-medium">
+                    {filter.name}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
@@ -155,23 +183,34 @@ export default function CreatePost() {
       )}
 
       {/* Caption Input */}
-      <TextInput
-        value={caption}
-        onChangeText={setCaption}
-        placeholder="Write a caption..."
-        placeholderTextColor="#555"
-        className="mt-4 mx-4 p-3 bg-gray-100 text-black rounded-lg"
-        style={{ borderColor: "#ddd", borderWidth: 1 }}
-      />
+      <View className="p-4 bg-white">
+        <TextInput
+          value={caption}
+          onChangeText={setCaption}
+          placeholder="Write a caption..."
+          placeholderTextColor="#666"
+          multiline
+          className="p-3 bg-gray-50 text-black rounded-xl"
+          style={{ minHeight: 80 }}
+        />
 
-      {/* Share Button */}
-      <TouchableOpacity onPress={createPost} className="mt-4 mx-4 bg-blue-500 p-3 rounded-lg items-center">
-        {loading ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <Text className="text-white font-semibold text-lg">Share</Text>
-        )}
-      </TouchableOpacity>
+        {/* Share Button */}
+        <TouchableOpacity 
+          onPress={createPost} 
+          disabled={loading || !filteredImage}
+          className={`mt-4 p-3 rounded-xl items-center ${
+            loading || !filteredImage ? 'bg-blue-300' : 'bg-blue-500'
+          }`}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text className="text-white font-semibold text-lg">
+              {filteredImage ? 'Share' : 'Select an image to share'}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
