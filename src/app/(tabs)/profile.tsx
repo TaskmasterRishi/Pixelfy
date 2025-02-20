@@ -224,7 +224,7 @@ const ProfileScreen = () => {
                 onPress={handleSignOut}
                 className="flex-1 py-2 rounded-lg bg-gray-100"
               >
-                <Text className="text-center font-semibold">Share Profile</Text>
+                <Text className="text-center font-semibold">Sign Out</Text>
               </TouchableOpacity>
             </View>
 

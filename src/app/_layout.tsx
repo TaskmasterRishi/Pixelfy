@@ -1,21 +1,37 @@
 import { Stack } from "expo-router";
+import { LogBox } from "react-native";
 import "../../global.css";
 import AuthProvider from "../providers/AuthProvider";
+import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+// Optionally suppress specific warnings
+LogBox.ignoreLogs([
+  "You are not currently signed in to Expo on your development machine",
+]);
 
 export default function RootLayout() {
     return (
-        <AuthProvider>
-            <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen 
-                    name="(screens)" 
-                    options={{ 
+        <SafeAreaProvider>
+            <AuthProvider>
+                <StatusBar style="dark" />
+                <Stack 
+                    screenOptions={{ 
                         headerShown: false,
-                        presentation: 'modal'
-                    }} 
-                />
-            </Stack>
-        </AuthProvider>
+                        contentStyle: { backgroundColor: 'white' },
+                        animation: 'none' // Disable animations for faster transitions
+                    }}
+                >
+                    <Stack.Screen name="(auth)" />
+                    <Stack.Screen name="(tabs)" />
+                    <Stack.Screen 
+                        name="(screens)" 
+                        options={{ 
+                            presentation: 'modal'
+                        }} 
+                    />
+                </Stack>
+            </AuthProvider>
+        </SafeAreaProvider>
     );
 }
