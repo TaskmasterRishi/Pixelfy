@@ -11,13 +11,21 @@ import '~/global.css';
 export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const { setSession } = useAuth();
 
   async function signUpWithEmail() {
     setError('');
+    
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    
     setLoading(true);
 
     try {
@@ -71,7 +79,7 @@ export default function SignupPage() {
           </View>
 
           {/* Password Input */}
-          <View className="mb-8">
+          <View className="mb-6">
             <Text className="text-gray-700 mb-2 font-medium">Create Password</Text>
             <View className="flex-row items-center border border-gray-200 rounded-lg px-4 bg-gray-50">
               <Ionicons name="lock-closed-outline" size={20} color="#6B7280" />
@@ -92,6 +100,35 @@ export default function SignupPage() {
               >
                 <Ionicons
                   name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color="#6B7280"
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Confirm Password Input */}
+          <View className="mb-8">
+            <Text className="text-gray-700 mb-2 font-medium">Confirm Password</Text>
+            <View className="flex-row items-center border border-gray-200 rounded-lg px-4 bg-gray-50">
+              <Ionicons name="lock-closed-outline" size={20} color="#6B7280" />
+              <TextInput
+                className="flex-1 h-12 ml-3 bg-transparent"
+                placeholder="••••••••"
+                placeholderTextColor="#9CA3AF"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+                autoCapitalize="none"
+                accessibilityLabel="Confirm Password"
+              />
+              <TouchableOpacity
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="ml-2"
+                accessibilityLabel={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+              >
+                <Ionicons
+                  name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
                   size={20}
                   color="#6B7280"
                 />
