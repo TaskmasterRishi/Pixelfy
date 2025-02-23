@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { View, Text, FlatList, ActivityIndicator, Alert, RefreshControl } from "react-native";
 import { supabase } from "~/src/lib/supabase";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import PostListItem from "~/src/Components/PostListItem";
 
 const PAGE_SIZE = 10;
@@ -11,14 +11,15 @@ export default function FeedScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(0);
+  const router = useRouter();
 
   // Fetch posts from Supabase
   const fetchPosts = async (reset = false) => {
     setLoading(true);
 
     const { data, error } = await supabase
-      .from("post")
-      .select("*, profiles(id, username, avatar_url)")
+      .from("posts")
+      .select("*, users(id, username, full_name, avatar_url)")
       .order("created_at", { ascending: false })
       .range(reset ? 0 : page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
@@ -46,9 +47,32 @@ export default function FeedScreen() {
     setLoading(false);
   };
 
-  // Fetch on focus
+  // Add function to check user profile
+  const checkUserProfile = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error } = await supabase
+      .from('users')
+      .select('username')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error fetching user profile:', error);
+      return;
+    }
+
+    if (!profile || !profile.username) {
+      console.log('Username not set or profile missing, redirecting to user_info');
+      router.push('/(screens)/user_info');
+    }
+  };
+
+  // Modify useFocusEffect to include profile check
   useFocusEffect(
     useCallback(() => {
+      checkUserProfile();
       fetchPosts(true);
     }, [])
   );
