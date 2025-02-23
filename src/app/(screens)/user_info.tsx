@@ -18,9 +18,11 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Font from 'expo-font';
 import { useNavigation } from '@react-navigation/native';
 import { Stack } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 export default function UserInfo() {
   const navigation = useNavigation();
+  const router = useRouter();
   const [formData, setFormData] = useState({
     username: '',
     fullName: '',
@@ -66,26 +68,63 @@ export default function UserInfo() {
   const validateForm = async () => {
     const newErrors: Record<string, string> = {};
 
-    // Check unique username
-    const { data: usernameData } = await supabase
-      .from('users')
-      .select('username')
-      .eq('username', formData.username)
-      .single();
+    // Validate username
+    if (!formData.username) {
+      newErrors.username = 'Username is required';
+    } else if (formData.username.length < 3) {
+      newErrors.username = 'Username must be at least 3 characters';
+    } else {
+      const { data: usernameData } = await supabase
+        .from('users')
+        .select('username')
+        .eq('username', formData.username)
+        .single();
 
-    if (usernameData) {
-      newErrors.username = 'Username already exists';
+      if (usernameData) {
+        newErrors.username = 'Username already exists';
+      }
     }
 
-    // Check unique phone
-    const { data: phoneData } = await supabase
-      .from('users')
-      .select('phone')
-      .eq('phone', formData.phoneNumber)
-      .single();
+    // Validate email
+    if (!userEmail) {
+      newErrors.email = 'Email is required';
+    } else {
+      const { data: emailData } = await supabase
+        .from('users')
+        .select('email')
+        .eq('email', userEmail)
+        .single();
 
-    if (phoneData) {
-      newErrors.phoneNumber = 'Phone number already exists';
+      if (emailData) {
+        newErrors.email = 'Email already exists';
+      }
+    }
+
+    // Validate phone number
+    if (!formData.phoneNumber) {
+      newErrors.phoneNumber = 'Phone number is required';
+    } else {
+      const fullPhoneNumber = `${selectedCountry.value}${formData.phoneNumber}`;
+      const { data: phoneData } = await supabase
+        .from('users')
+        .select('phone')
+        .eq('phone', fullPhoneNumber)
+        .single();
+
+      if (phoneData) {
+        newErrors.phoneNumber = 'Phone number already exists';
+      }
+    }
+
+    // Validate date of birth
+    if (!formData.dateOfBirth) {
+      newErrors.dateOfBirth = 'Date of birth is required';
+    } else {
+      const dob = new Date(formData.dateOfBirth);
+      const age = new Date().getFullYear() - dob.getFullYear();
+      if (age < 13) {
+        newErrors.dateOfBirth = 'You must be at least 13 years old';
+      }
     }
 
     setErrors(newErrors);
@@ -102,9 +141,17 @@ export default function UserInfo() {
       const isValid = await validateForm();
       if (!isValid) return;
 
+      // Get the current user's ID from Supabase auth
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('No authenticated user found');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('users')
         .insert([{
+          id: user.id, // Use the authenticated user's ID
           username: formData.username,
           full_name: formData.fullName,
           email: userEmail,
@@ -121,7 +168,10 @@ export default function UserInfo() {
 
       if (error) throw error;
       console.log('User created:', data);
-      // Add navigation or success message here
+      
+      // Use Expo Router's router to navigate to tabs
+      router.replace('/(tabs)');
+      
     } catch (error) {
       console.error('Error creating user:', error);
     }
@@ -130,8 +180,11 @@ export default function UserInfo() {
   const handleDateChange = (event, date) => {
     setShowDatePicker(false);
     if (date) {
-      setSelectedDate(date);
-      setFormData({...formData, dateOfBirth: date.toLocaleDateString()});
+      // Create a new date object with UTC time to avoid timezone issues
+      const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      setSelectedDate(utcDate);
+      // Convert to ISO format without timezone offset
+      setFormData({...formData, dateOfBirth: utcDate.toISOString().split('T')[0]});
     }
   };
 
@@ -178,7 +231,7 @@ export default function UserInfo() {
         </View>
 
         {/* Form */}
-        <ScrollView className="flex-1 px-6 pt-4">
+        <View className="flex-1 px-6 pt-4">
           <View className="mb-4">
             <Text className="text-base text-gray-700 mb-2">Username</Text>
             <View className="relative">
@@ -227,7 +280,7 @@ export default function UserInfo() {
               <View className="flex-1 relative">
                 <Ionicons name="call-outline" size={20} color="#6b7280" className="absolute left-3 top-1/2 -translate-y-2.5 z-10" />
                 <TextInput
-                  className="border border-gray-200 rounded-r-lg pl-10 pr-3 py-3 text-base flex-1"
+                  className={`border ${errors.phoneNumber ? 'border-red-500' : 'border-gray-200'} rounded-r-lg pl-10 pr-3 py-3 text-base flex-1`}
                   placeholder="Phone number"
                   keyboardType="phone-pad"
                   value={formData.phoneNumber}
@@ -235,6 +288,9 @@ export default function UserInfo() {
                 />
               </View>
             </View>
+            {errors.phoneNumber && (
+              <Text className="text-red-500 text-sm mt-1">{errors.phoneNumber}</Text>
+            )}
           </View>
 
           <View className="mb-4">
@@ -242,12 +298,20 @@ export default function UserInfo() {
             <View className="relative">
               <Ionicons name="calendar-outline" size={20} color="#6b7280" className="absolute left-3 top-1/2 -translate-y-2.5 z-10" />
               <TouchableOpacity 
-                className="flex-row items-center justify-between border border-gray-200 rounded-lg pl-10 pr-3 py-3"
+                className={`flex-row items-center justify-between border ${errors.dateOfBirth ? 'border-red-500' : 'border-gray-200'} rounded-lg pl-10 pr-3 py-3`}
                 onPress={() => setShowDatePicker(true)}
               >
-                <Text className="text-base">{formData.dateOfBirth || 'Select date of birth'}</Text>
+                <Text className="text-base">
+                  {formData.dateOfBirth ? 
+                    new Date(formData.dateOfBirth).toLocaleDateString() : 
+                    'Select date of birth'
+                  }
+                </Text>
               </TouchableOpacity>
             </View>
+            {errors.dateOfBirth && (
+              <Text className="text-red-500 text-sm mt-1">{errors.dateOfBirth}</Text>
+            )}
             {showDatePicker && (
               <DateTimePicker
                 value={selectedDate}
@@ -322,7 +386,7 @@ export default function UserInfo() {
               Create Profile
             </Text>
           </TouchableOpacity>
-        </ScrollView>
+        </View>
 
         {/* Country Code Modal */}
         <Modal
