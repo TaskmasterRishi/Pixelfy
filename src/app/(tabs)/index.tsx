@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { View, Text, FlatList, ActivityIndicator, Alert, RefreshControl } from "react-native";
 import { supabase } from "~/src/lib/supabase";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -10,18 +10,35 @@ export default function FeedScreen() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [page, setPage] = useState(0);
+  const [lastPostId, setLastPostId] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
   const router = useRouter();
+  const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch posts from Supabase
   const fetchPosts = async (reset = false) => {
+    if (!hasMore && !reset) return;
+
     setLoading(true);
 
-    const { data, error } = await supabase
+    const query = supabase
       .from("posts")
-      .select(`*`)
+      .select(`
+        *,
+        user:users (
+          username,
+          avatar_url,
+          verified
+        )
+      `)
       .order("created_at", { ascending: false })
-      .range(reset ? 0 : page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+      .limit(PAGE_SIZE);
+
+    if (!reset && lastPostId) {
+      query.lt('id', lastPostId); // Fetch posts with IDs less than the last post ID
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       Alert.alert("Error", error.message);
@@ -36,14 +53,17 @@ export default function FeedScreen() {
       return;
     }
 
-    // Remove duplicates
+    if (data.length > 0) {
+      setLastPostId(data[data.length - 1].id); // Update the last post ID
+    }
+
     setPosts((prev) => {
       const newPosts = reset ? data : [...prev, ...data];
       const uniquePosts = Array.from(new Map(newPosts.map((post) => [post.id, post])).values());
       return uniquePosts;
     });
 
-    setPage(reset ? 1 : page + 1);
+    setHasMore(data.length === PAGE_SIZE); // Check if there are more posts to fetch
     setLoading(false);
   };
 
@@ -84,6 +104,17 @@ export default function FeedScreen() {
     setRefreshing(false);
   };
 
+  // Debounced fetch on scroll
+  const handleEndReached = () => {
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current);
+    }
+
+    debounceTimeout.current = setTimeout(() => {
+      fetchPosts();
+    }, 300); // 300ms debounce
+  };
+
   return (
     <View className="flex-1 bg-gray-100">
       {loading && posts.length === 0 ? (
@@ -96,9 +127,12 @@ export default function FeedScreen() {
           keyExtractor={(item, index) => (item.id ? item.id.toString() : `post-${index}`)}
           renderItem={({ item }) => <PostListItem post={item} />}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          onEndReached={() => fetchPosts(false)}
+          onEndReached={handleEndReached}
           onEndReachedThreshold={0.5}
           ListFooterComponent={loading ? <ActivityIndicator size="small" color="#000" /> : null}
+          initialNumToRender={10} // Render 10 items initially
+          maxToRenderPerBatch={10} // Render 10 items per batch
+          windowSize={21} // Render 21 items in the window (10 above, 10 below, 1 in view)
         />
       )}
     </View>

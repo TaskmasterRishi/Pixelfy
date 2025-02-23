@@ -15,21 +15,25 @@ import Animated, {
 } from 'react-native-reanimated';
 
 interface User {
-  id: string;
+  id: string; // UUID
   username: string;
   full_name: string;
   avatar_url: string | null;
   verified: boolean;
+  is_private: boolean;
+  // Other fields are not needed in this component
 }
 
 interface Post {
-  id: string;
-  user_id: string;
+  id: string; // UUID
+  user_id: string; // UUID
   caption: string | null;
   media_url: string;
   media_type: string;
   created_at: string;
   user: User;
+  // Add likes count from the likes table
+  likes_count?: number;
 }
 
 interface PostListItemProps {
@@ -39,6 +43,8 @@ interface PostListItemProps {
   onShare?: (postId: string) => void;
   onBookmark?: (postId: string) => void;
   onProfilePress?: (userId: string) => void;
+  // Add isLiked prop to track if the current user has liked the post
+  isLiked?: boolean;
 }
 
 export default function PostListItem({ 
@@ -47,11 +53,12 @@ export default function PostListItem({
   onComment,
   onShare,
   onBookmark,
-  onProfilePress
+  onProfilePress,
+  isLiked = false // Default to false
 }: PostListItemProps) {
   const { width } = useWindowDimensions();
   const [avatarError, setAvatarError] = useState(false);
-  const [liked, setLiked] = useState(false);
+  const [liked, setLiked] = useState(isLiked);
   const [imageError, setImageError] = useState(false);
   
   const [lastTap, setLastTap] = useState(0);
@@ -79,7 +86,9 @@ export default function PostListItem({
         withTiming(0, { duration: 200 })
       );
       runOnJS(setLiked)(true);
-      runOnJS(onLike?.(post.id));
+      if (onLike) {
+        runOnJS(onLike)(post.id);
+      }
     }
   }, [liked, post.id, onLike]);
 
@@ -132,6 +141,7 @@ export default function PostListItem({
   React.useEffect(() => {
     contentOpacity.value = 1;
   }, []);
+
 
   if (!post || !post.user) {
     return null;
@@ -230,7 +240,7 @@ export default function PostListItem({
         {/* Likes & Caption */}
         <View className="mt-2">
           <Text className="font-semibold text-[14px]">
-            {liked ? "you liked this pic" : "0 likes"}
+            {liked ? "You liked this" : `${post.likes_count || 0} likes`}
           </Text>
           {post.caption && (
             <Text className="text-[14px] leading-5 mt-1">
