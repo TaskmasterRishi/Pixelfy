@@ -12,6 +12,7 @@
     "@cloudinary/url-gen": "^1.21.0",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native-community/datetimepicker": "8.2.0",
+    "@react-native-community/hooks": "^100.1.0",
     "@react-native-community/slider": "^4.5.5",
     "@react-native-picker/picker": "^2.11.0",
     "@react-navigation/native": "^7.0.14",
@@ -28,7 +29,7 @@
     "expo-font": "~13.0.4",
     "expo-image": "~2.0.6",
     "expo-image-manipulator": "^13.0.6",
-    "expo-image-picker": "~16.0.5",
+    "expo-image-picker": "~16.0.6",
     "expo-linear-gradient": "~14.0.2",
     "expo-linking": "~7.0.5",
     "expo-router": "~4.0.17",
@@ -40,6 +41,7 @@
     "react-dom": "18.3.1",
     "react-icons": "^5.5.0",
     "react-native": "0.76.7",
+    "react-native-gesture-handler": "~2.20.2",
     "react-native-image-filter-kit": "^0.8.0",
     "react-native-picker-select": "^9.3.1",
     "react-native-reanimated": "~3.16.1",
@@ -47,6 +49,7 @@
     "react-native-screens": "~4.4.0",
     "react-native-web": "~0.19.13",
     "tailwind-react-native-classnames": "^3.0.1",
+    "tailwind-rn": "^4.2.0",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
