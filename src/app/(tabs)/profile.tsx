@@ -13,10 +13,11 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '~/src/providers/AuthProvider';
 import { supabase } from '~/src/lib/supabase';
-import { uploadAvatar } from '~/src/lib/cloudinary';
+import { uploadAvatar, deleteImage } from '~/src/lib/cloudinary';
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import Feather from '@expo/vector-icons/Feather';
 import { router } from 'expo-router';
+import * as FileSystem from 'expo-file-system';
 
 const ProfileScreen = () => {
   const { user } = useAuth();
@@ -101,14 +102,28 @@ const ProfileScreen = () => {
 
   const handlePickImage = async () => {
     try {
+      // Request permissions first
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'We need access to your photos to upload an avatar');
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.3,
       });
 
       if (!result.canceled && result.assets[0].uri) {
+        // Check if the selected file is an image
+        const fileInfo = await FileSystem.getInfoAsync(result.assets[0].uri);
+        if (!fileInfo.exists) {
+          Alert.alert('Error', 'Selected file does not exist');
+          return;
+        }
+
         await uploadAndSaveAvatar(result.assets[0].uri);
       }
     } catch (error) {
@@ -120,19 +135,42 @@ const ProfileScreen = () => {
   const uploadAndSaveAvatar = async (uri: string) => {
     setIsUpdating(true);
     try {
-      const imageUrl = await uploadAvatar(uri);
-      if (!imageUrl) throw new Error('Failed to upload image');
+      // Get the current avatar URL
+      const oldAvatarUrl = profile?.avatar_url;
 
+      // Upload new image
+      const imageUrl = await uploadAvatar(uri);
+      if (!imageUrl) {
+        throw new Error('Failed to upload image to Cloudinary');
+      }
+
+      // Update Supabase with new avatar URL
       const { error } = await supabase
         .from('users')
         .update({ avatar_url: imageUrl })
         .eq('id', user.id);
 
       if (error) throw error;
+
+      // Delete old avatar if it exists
+      if (oldAvatarUrl) {
+        try {
+          // Extract public ID from URL
+          const urlParts = oldAvatarUrl.split('/');
+          const publicId = urlParts[urlParts.length - 1].split('.')[0];
+          console.log('Extracted Public ID:', publicId); // Debug log
+          await deleteImage(publicId);
+        } catch (error) {
+          console.error('Error deleting old avatar:', error);
+          // Continue even if deletion fails
+        }
+      }
+
+      Alert.alert('Success', 'Profile picture updated successfully');
       await fetchProfile();
     } catch (error) {
       console.error('Error updating avatar:', error);
-      Alert.alert('Error', 'Failed to update profile picture');
+      Alert.alert('Error', error.message || 'Failed to update profile picture');
     } finally {
       setIsUpdating(false);
     }

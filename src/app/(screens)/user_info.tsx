@@ -19,6 +19,7 @@ import * as Font from 'expo-font';
 import { useNavigation } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { useRouter } from 'expo-router';
+import { uploadAvatar } from '~/src/lib/cloudinary';
 
 export default function UserInfo() {
   const navigation = useNavigation();
@@ -31,6 +32,7 @@ export default function UserInfo() {
     bio: '',
     website: '',
     gender: '',
+    avatarUri: '',
   });
   const [selectedCountry, setSelectedCountry] = useState(countryCodes[0]);
   const [isCountryModalVisible, setIsCountryModalVisible] = useState(false);
@@ -148,6 +150,12 @@ export default function UserInfo() {
         return;
       }
 
+      // Upload avatar if provided
+      let avatarUrl = '';
+      if (formData.avatarUri) {
+        avatarUrl = await uploadAvatar(formData.avatarUri);
+      }
+
       const { data, error } = await supabase
         .from('users')
         .insert([{
@@ -156,7 +164,7 @@ export default function UserInfo() {
           full_name: formData.fullName,
           email: userEmail,
           phone: `${selectedCountry.value}${formData.phoneNumber}`,
-          avatar_url: '',
+          avatar_url: avatarUrl,
           bio: formData.bio,
           website: formData.website,
           gender: formData.gender,

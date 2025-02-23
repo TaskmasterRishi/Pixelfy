@@ -2,7 +2,7 @@ import { Cloudinary } from "@cloudinary/url-gen";
 import * as FileSystem from "expo-file-system";
 import * as Crypto from 'expo-crypto';
 
-// Add these constants
+// Directly write the credentials but keep them as constants
 const CLOUD_NAME = "dbcgxsh5x";
 const API_KEY = "862634424731423";
 const API_SECRET = "W79r47BOrJx7s7ccKN-1O93nc8U";
@@ -35,7 +35,7 @@ export const uploadImage = async (imageUri, folder = "") => {
       name: `upload.${mimeType.split("/")[1]}`,
     });
     data.append("upload_preset", UPLOAD_PRESET);
-    if (folder) data.append("folder", folder);
+    if (folder) data.append("folder", folder); // Optional folder structure
 
     const response = await fetch(
       `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
@@ -58,21 +58,28 @@ export const uploadImage = async (imageUri, folder = "") => {
   }
 };
 
+// ✅ New method to upload avatar to 'avatar' folder
+export const uploadAvatar = async (imageUri) => {
+  return uploadImage(imageUri, "avatar"); // Upload avatar images to 'avatar' folder
+};
+
 export const deleteImage = async (publicId: string) => {
   try {
+    console.log('Deleting image with public ID:', publicId); // Debug log
+
     const timestamp = Math.floor(Date.now() / 1000);
     const signature = await generateSignature(publicId, timestamp);
 
     const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/destroy`,
+      `https://api.cloudinary.com/v1_1/dbcgxsh5x/image/destroy`,
       {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           public_id: publicId,
-          api_key: API_KEY,
+          api_key: '862634424731423',
           timestamp,
           signature,
         }),
@@ -81,29 +88,24 @@ export const deleteImage = async (publicId: string) => {
 
     if (!response.ok) {
       const text = await response.text();
-      console.error('Cloudinary delete error:', text);
-      throw new Error('Failed to delete image');
+      throw new Error(`Failed to delete image: ${text}`);
     }
 
     const result = await response.json();
+    console.log('Delete result:', result); // Debug log
     return result.result === "ok";
   } catch (error) {
     console.error("Error deleting image:", error);
-    return false;
+    throw error;
   }
 };
 
-// Helper function to generate signature
+// Helper function to generate the signature
 const generateSignature = async (publicId: string, timestamp: number) => {
-  const str = `public_id=${publicId}&timestamp=${timestamp}${API_SECRET}`;
+  const str = `public_id=${publicId}&timestamp=${timestamp}W79r47BOrJx7s7ccKN-1O93nc8U`;
   const hash = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA1,
     str
   );
   return hash;
-};
-
-// ✅ New method to upload avatar to 'avatar' folder
-export const uploadAvatar = async (imageUri) => {
-  return uploadImage(imageUri, "avatar"); // Upload avatar images to 'avatar' folder
 };
