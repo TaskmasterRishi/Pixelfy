@@ -39,22 +39,22 @@ const ProfileScreen = () => {
   const fetchProfile = async () => {
     setIsLoading(true);
     try {
-      // Fetch profile data
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, username, bio, avatar_url')
+      // Fetch user data
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id, username, full_name, email, avatar_url, bio, website, is_private, verified')
         .eq('id', user.id)
         .single();
 
-      if (profileError) throw profileError;
+      if (userError) throw userError;
 
-      setProfile(profileData);
-      setUsername(profileData.username || '');
-      setBio(profileData.bio || '');
+      setProfile(userData);
+      setUsername(userData.username || '');
+      setBio(userData.bio || '');
 
       // Fetch posts count
       const { count, error: countError } = await supabase
-        .from('post')
+        .from('posts')
         .select('id', { count: 'exact' })
         .eq('user_id', user.id);
 
@@ -63,8 +63,8 @@ const ProfileScreen = () => {
 
       // Fetch posts
       const { data: postsData, error: postsError } = await supabase
-        .from('post')
-        .select('*')
+        .from('posts')
+        .select('id, media_url, caption, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -83,7 +83,7 @@ const ProfileScreen = () => {
     setIsUpdating(true);
     try {
       const { error } = await supabase
-        .from('profiles')
+        .from('users')
         .update({ username, bio })
         .eq('id', user.id);
 
@@ -124,7 +124,7 @@ const ProfileScreen = () => {
       if (!imageUrl) throw new Error('Failed to upload image');
 
       const { error } = await supabase
-        .from('profiles')
+        .from('users')
         .update({ avatar_url: imageUrl })
         .eq('id', user.id);
 
@@ -265,7 +265,7 @@ const ProfileScreen = () => {
                     className="w-1/3 aspect-square p-0.5"
                   >
                     <Image
-                      source={{ uri: post.image }}
+                      source={{ uri: post.media_url }}
                       className="w-full h-full"
                     />
                   </TouchableOpacity>

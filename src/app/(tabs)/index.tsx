@@ -19,7 +19,7 @@ export default function FeedScreen() {
 
     const { data, error } = await supabase
       .from("posts")
-      .select("*, users(id, username, full_name, avatar_url)")
+      .select(`*`)
       .order("created_at", { ascending: false })
       .range(reset ? 0 : page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
@@ -54,7 +54,7 @@ export default function FeedScreen() {
 
     const { data: profile, error } = await supabase
       .from('users')
-      .select('username')
+      .select('username, is_private, verified')
       .eq('id', user.id)
       .maybeSingle();
 

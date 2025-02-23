@@ -88,29 +88,62 @@ export default function CreatePost() {
 
     setLoading(true);
 
-    const { data: profileData, error: profileError } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("id", session?.user.id)
-      .maybeSingle();
+    try {
+      // Verify session exists
+      if (!session || !session.user) {
+        throw new Error("No active session found");
+      }
 
-    if (profileError || !profileData) {
-      alert("Profile not found. Please create a profile first.");
-      setLoading(false);
-      return;
-    }
+      // Debug: Log the user ID
+      console.log("Session user ID:", session.user.id);
 
-    const { error } = await supabase
-      .from("post")
-      .insert([{ caption, image: filteredImage, user_id: session?.user.id }]);
+      // Verify user exists in users table
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id, username')
+        .eq('id', session.user.id)
+        .single();
 
-    if (error) {
-      alert("Error creating post");
-    } else {
+      // Debug: Log the user data
+      console.log("User data:", userData);
+
+      if (userError) {
+        console.error("User query error:", userError);
+        throw new Error("Error fetching user data");
+      }
+
+      if (!userData) {
+        throw new Error(`User with ID ${session.user.id} not found in database`);
+      }
+
+      // Create the post
+      const { data, error } = await supabase
+        .from("posts")
+        .insert([{ 
+          user_id: session.user.id,
+          caption,
+          media_url: filteredImage,
+          media_type: "image",
+          created_at: new Date().toISOString()
+        }])
+        .select();
+
+      if (error) {
+        console.error("Post creation error:", error);
+        throw error;
+      }
+
+      if (data) {
+        console.log("Post created:", data[0]);
+      }
+
       router.push("/(tabs)?refresh=true");
+    } catch (error) {
+      console.error("Full error:", error);
+      alert("Error creating post: " + error.message);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   useEffect(() => {

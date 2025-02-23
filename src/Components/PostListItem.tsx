@@ -14,17 +14,22 @@ import Animated, {
   runOnJS
 } from 'react-native-reanimated';
 
-interface Profile {
+interface User {
+  id: string;
   username: string;
+  full_name: string;
   avatar_url: string | null;
+  verified: boolean;
 }
 
 interface Post {
   id: string;
-  image: string;
-  caption?: string;
+  user_id: string;
+  caption: string | null;
+  media_url: string;
+  media_type: string;
   created_at: string;
-  profiles: Profile;
+  user: User;
 }
 
 interface PostListItemProps {
@@ -33,7 +38,7 @@ interface PostListItemProps {
   onComment?: (postId: string) => void;
   onShare?: (postId: string) => void;
   onBookmark?: (postId: string) => void;
-  onProfilePress?: (username: string) => void;
+  onProfilePress?: (userId: string) => void;
 }
 
 export default function PostListItem({ 
@@ -55,10 +60,10 @@ export default function PostListItem({
   const contentOpacity = useSharedValue(0);
 
   const avatarUrl = useMemo(() => {
-    return post.profiles?.avatar_url && !avatarError
-      ? `${post.profiles.avatar_url}?t=${Date.now()}`
+    return post.user?.avatar_url && !avatarError
+      ? `${post.user.avatar_url}?t=${Date.now()}`
       : null;
-  }, [post.profiles?.avatar_url, avatarError]);
+  }, [post.user?.avatar_url, avatarError]);
 
   const timeAgo = useMemo(() => {
     return formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
@@ -98,8 +103,8 @@ export default function PostListItem({
   }, [post.id, onLike]);
 
   const handleProfilePress = useCallback(() => {
-    onProfilePress?.(post.profiles.username);
-  }, [post.profiles.username, onProfilePress]);
+    onProfilePress?.(post.user_id);
+  }, [post.user_id, onProfilePress]);
 
   // Animation styles
   const heartAnimatedStyle = useAnimatedStyle(() => ({
@@ -128,7 +133,7 @@ export default function PostListItem({
     contentOpacity.value = 1;
   }, []);
 
-  if (!post || !post.profiles) {
+  if (!post || !post.user) {
     return null;
   }
 
@@ -152,7 +157,12 @@ export default function PostListItem({
             </View>
           )}
           <View className="ml-3">
-            <Text className="font-semibold text-[14px]">{post.profiles.username}</Text>
+            <Text className="font-semibold text-[14px]">
+              {post.user.username}
+              {post.user.verified && (
+                <Ionicons name="checkmark-circle" size={14} color="#3897F0" style={{ marginLeft: 4 }} />
+              )}
+            </Text>
             <Text className="text-xs text-gray-500">{timeAgo}</Text>
           </View>
         </View>
@@ -168,7 +178,7 @@ export default function PostListItem({
       >
         <View className="relative">
           <Image
-            source={{ uri: post.image }}
+            source={{ uri: post.media_url }}
             className="w-full bg-gray-100"
             style={{ height: width, aspectRatio: 1 }}
             onError={() => setImageError(true)}
@@ -224,7 +234,7 @@ export default function PostListItem({
           </Text>
           {post.caption && (
             <Text className="text-[14px] leading-5 mt-1">
-              <Text className="font-semibold">{post.profiles.username} </Text>
+              <Text className="font-semibold">{post.user.username} </Text>
               <Text className="ml-1">{post.caption}</Text>
             </Text>
           )}
