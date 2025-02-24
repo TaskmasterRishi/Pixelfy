@@ -32,6 +32,7 @@ const ProfileScreen = () => {
   const [activeTab, setActiveTab] = useState('posts'); // 'posts' or 'saved'
   const { width } = useWindowDimensions();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedPost, setSelectedPost] = useState<{ id: string, mediaUrl: string } | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -199,9 +200,10 @@ const ProfileScreen = () => {
   return (
     <ScrollView className="flex-1 bg-white">
       <ViewImage
-        visible={!!selectedImage}
-        imageUrl={selectedImage || ''}
-        onClose={() => setSelectedImage(null)}
+        visible={!!selectedPost}
+        imageUrl={selectedPost?.mediaUrl || ''}
+        postId={selectedPost?.id}
+        onClose={() => setSelectedPost(null)}
       />
       
       <View className="px-4 py-6">
@@ -309,7 +311,7 @@ const ProfileScreen = () => {
                   <TouchableOpacity 
                     key={post.id} 
                     className="w-1/3 aspect-square p-0.5"
-                    onPress={() => setSelectedImage(post.media_url)}
+                    onPress={() => setSelectedPost({ id: post.id, mediaUrl: post.media_url })}
                   >
                     <Image
                       source={{ uri: post.media_url }}
