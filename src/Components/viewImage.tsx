@@ -3,6 +3,7 @@ import { Modal, Image, TouchableOpacity, View, Text, Pressable } from 'react-nat
 import { GestureHandlerRootView, PinchGestureHandler, PinchGestureHandlerGestureEvent } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import Animated, { useAnimatedGestureHandler, useSharedValue, withSpring } from 'react-native-reanimated';
 
 interface ViewImageProps {
   visible: boolean;
@@ -46,11 +47,32 @@ const ViewImage = ({
   likes = 0,
   caption = ''
 }: ViewImageProps) => {
-  const [scale, setScale] = useState(1);
   const [fullScreen, setFullScreen] = useState(false);
   const [imageHeight, setImageHeight] = useState(0);
   const [originalWidth, setOriginalWidth] = useState(0);
   const [originalHeight, setOriginalHeight] = useState(0);
+
+  // Zoom animation values
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+
+  const pinchHandler = useAnimatedGestureHandler<PinchGestureHandlerGestureEvent>({
+    onStart: (_, ctx: { startScale: number }) => {
+      ctx.startScale = scale.value;
+    },
+    onActive: (event, ctx) => {
+      scale.value = ctx.startScale * event.scale;
+    },
+    onEnd: () => {
+      if (scale.value < 1) {
+        scale.value = withSpring(1);
+      } else if (scale.value > 3) {
+        scale.value = withSpring(3);
+      } else {
+        scale.value = withSpring(scale.value);
+      }
+    },
+  });
 
   // Remove cropping from the Cloudinary URL and fit the image properly
   const optimizedImageUrl = imageUrl; // Use the original image URL without cropping
@@ -91,51 +113,105 @@ const ViewImage = ({
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <BlurView intensity={100} tint="dark" className="flex-1 justify-center items-center">
-        {/* Clickable background to close */}
-        <Pressable 
-          className="absolute inset-0" 
-          onPress={onClose}
-        />
-        
-        <View className="w-[80%] bg-white rounded-2xl overflow-hidden shadow-2xl">
-          <View>
-            {/* Header */}
-            <View className="flex-row items-center p-4 border-b border-gray-200">
-              <TouchableOpacity onPress={onClose} className="absolute left-2 z-10">
-                <Feather name="x" size={24} color="black" />
-              </TouchableOpacity>
-              
-              <View className="flex-row items-center flex-1 ml-8">
-                {avatarUrl ? (
-                  <Image 
-                    source={{ uri: avatarUrl }} 
-                    className="w-8 h-8 rounded-full"
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <BlurView intensity={100} tint="dark" className="flex-1 justify-center items-center">
+          {/* Clickable background to close */}
+          <Pressable 
+            className="absolute inset-0" 
+            onPress={onClose}
+          />
+          
+          <View className="w-[80%] bg-white rounded-2xl overflow-hidden shadow-2xl">
+            <View>
+              {/* Header */}
+              <View className="flex-row items-center p-4 border-b border-gray-200">
+                <TouchableOpacity onPress={onClose} className="absolute left-2 z-10">
+                  <Feather name="x" size={24} color="black" />
+                </TouchableOpacity>
+                
+                <View className="flex-row items-center flex-1 ml-8">
+                  {avatarUrl ? (
+                    <Image 
+                      source={{ uri: avatarUrl }} 
+                      className="w-8 h-8 rounded-full"
+                    />
+                  ) : (
+                    <View className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center">
+                      <Feather name="user" size={16} color="black" />
+                    </View>
+                  )}
+                  <View className="ml-3">
+                    <Text className="text-black font-semibold">{username}</Text>
+                    <Text className="text-gray-500 text-xs">{formatTimeAgo(timestamp)}</Text>
+                  </View>
+                </View>
+                
+                <TouchableOpacity>
+                  <Feather name="more-horizontal" size={24} color="black" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Image Container */}
+              <PinchGestureHandler onGestureEvent={pinchHandler}>
+                <Animated.View
+                  style={{
+                    width: '100%',
+                    aspectRatio: originalWidth && originalHeight ? originalWidth / originalHeight : 1,
+                    backgroundColor: '#000'
+                  }}
+                >
+                  <Animated.Image
+                    source={{ uri: optimizedImageUrl }}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      transform: [{ scale: scale }]
+                    }}
+                    resizeMode="contain"
                   />
-                ) : (
-                  <View className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center">
-                    <Feather name="user" size={16} color="black" />
+                </Animated.View>
+              </PinchGestureHandler>
+
+              {/* Actions */}
+              <View className="p-4 border-t border-gray-200">
+                <View className="flex-row justify-between mb-4">
+                  <View className="flex-row space-x-4">
+                    <TouchableOpacity>
+                      <Feather name="heart" size={24} color="black" />
+                    </TouchableOpacity>
+                    <TouchableOpacity>
+                      <Feather name="message-circle" size={24} color="black" />
+                    </TouchableOpacity>
+                    <TouchableOpacity>
+                      <Feather name="send" size={24} color="black" />
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity>
+                    <Feather name="bookmark" size={24} color="black" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Likes */}
+                <Text className="text-black font-semibold mb-2">
+                  {likes.toLocaleString()} likes
+                </Text>
+
+                {/* Caption */}
+                {caption && (
+                  <View className="flex-row mb-2">
+                    <Text className="text-black font-semibold mr-2">{username}</Text>
+                    <Text className="text-black flex-1">{caption}</Text>
                   </View>
                 )}
-                <View className="ml-3">
-                  <Text className="text-black font-semibold">{username}</Text>
-                  <Text className="text-gray-500 text-xs">{formatTimeAgo(timestamp)}</Text>
-                </View>
               </View>
-              
-              <TouchableOpacity>
-                <Feather name="more-horizontal" size={24} color="black" />
-              </TouchableOpacity>
             </View>
+          </View>
 
-            {/* Image Container */}
+          {/* Full Screen Image */}
+          {fullScreen && (
             <Pressable 
-              onLongPress={handleLongPress}
-              style={{
-                width: '100%',
-                aspectRatio: originalWidth && originalHeight ? originalWidth / originalHeight : 1,
-                backgroundColor: '#000'
-              }}
+              className="absolute inset-0 bg-black justify-center items-center"
+              onPress={() => setFullScreen(false)}
             >
               <Image
                 source={{ uri: optimizedImageUrl }}
@@ -143,62 +219,12 @@ const ViewImage = ({
                   width: '100%',
                   height: '100%'
                 }}
-                resizeMode="cover"
+                resizeMode="contain"
               />
             </Pressable>
-
-            {/* Actions */}
-            <View className="p-4 border-t border-gray-200">
-              <View className="flex-row justify-between mb-4">
-                <View className="flex-row space-x-4">
-                  <TouchableOpacity>
-                    <Feather name="heart" size={24} color="black" />
-                  </TouchableOpacity>
-                  <TouchableOpacity>
-                    <Feather name="message-circle" size={24} color="black" />
-                  </TouchableOpacity>
-                  <TouchableOpacity>
-                    <Feather name="send" size={24} color="black" />
-                  </TouchableOpacity>
-                </View>
-                <TouchableOpacity>
-                  <Feather name="bookmark" size={24} color="black" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Likes */}
-              <Text className="text-black font-semibold mb-2">
-                {likes.toLocaleString()} likes
-              </Text>
-
-              {/* Caption */}
-              {caption && (
-                <View className="flex-row mb-2">
-                  <Text className="text-black font-semibold mr-2">{username}</Text>
-                  <Text className="text-black flex-1">{caption}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-
-        {/* Full Screen Image */}
-        {fullScreen && (
-          <Pressable 
-            className="absolute inset-0 bg-black justify-center items-center"
-            onPress={() => setFullScreen(false)}
-          >
-            <Image
-              source={{ uri: optimizedImageUrl }}
-              style={{
-                width: '100%',
-                height: '100%'
-              }}
-              resizeMode="contain"
-            />
-          </Pressable>
-        )}
-      </BlurView>
+          )}
+        </BlurView>
+      </GestureHandlerRootView>
     </Modal>
   );
 };
