@@ -3,13 +3,14 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useAuth } from "~/src/providers/AuthProvider";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { memo } from 'react';
-import Animated, { 
-    useAnimatedStyle, 
-    withSpring, 
+import Animated, {
+    useAnimatedStyle,
+    withSpring,
     withTiming,
     withSequence,
     Easing,
 } from 'react-native-reanimated';
+import SearchPage from './search';
 
 const springConfig = {
     damping: 15,
@@ -37,7 +38,7 @@ const TabIcon = memo(({ name, color, focused }: { name: string, color: string, f
         },
         useAnimatedStyle(() => ({
             transform: [
-                { 
+                {
                     scale: withSpring(focused ? 1.1 : 1, springConfig)
                 },
                 {
@@ -46,17 +47,17 @@ const TabIcon = memo(({ name, color, focused }: { name: string, color: string, f
             ],
         }))
     ]}>
-        <FontAwesome 
-            name={name} 
-            size={22} 
-            color={color} 
+        <FontAwesome
+            name={name}
+            size={22}
+            color={color}
             style={{
                 height: 22,
                 width: 22,
                 textAlign: 'center',
             }}
         />
-        
+
         {/* Bottom indicator line */}
         <Animated.View style={[{
             width: 16,
@@ -68,7 +69,7 @@ const TabIcon = memo(({ name, color, focused }: { name: string, color: string, f
         }, useAnimatedStyle(() => ({
             opacity: withTiming(focused ? 1 : 0, timingConfig),
             transform: [
-                { 
+                {
                     scaleX: withSpring(focused ? 1 : 0, {
                         ...springConfig,
                         stiffness: 180,
@@ -87,7 +88,7 @@ const TabIcon = memo(({ name, color, focused }: { name: string, color: string, f
                 position: 'absolute',
                 zIndex: -1,
             }, useAnimatedStyle(() => ({
-                transform: [{ 
+                transform: [{
                     scale: withSequence(
                         withTiming(1.2, {
                             duration: 200,
@@ -118,7 +119,7 @@ export default function TabLayout() {
 
     return (
         <SafeAreaView style={{ flex: 1 }}>
-            <Tabs 
+            <Tabs
                 screenOptions={{
                     tabBarActiveTintColor: "#007AFF",
                     tabBarInactiveTintColor: "#8E8E93",
@@ -141,6 +142,14 @@ export default function TabLayout() {
                     }
                 }}
             >
+                <Tabs.Screen
+                    name="search"
+                    options={{
+                        title: 'Search',
+                        tabBarIcon: ({ color }) => <TabIcon name="search" color={color} />,
+                    }}
+                />
+
                 <Tabs.Screen
                     name="index"
                     options={{
@@ -167,6 +176,8 @@ export default function TabLayout() {
                         )
                     }}
                 />
+
+
             </Tabs>
         </SafeAreaView>
     );
