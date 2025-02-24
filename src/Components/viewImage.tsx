@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Image, TouchableOpacity, View, Text, Pressable } from 'react-native';
-import { GestureHandlerRootView, PinchGestureHandler, PinchGestureHandlerGestureEvent } from 'react-native-gesture-handler';
+import { Modal, Image, TouchableOpacity, View, Text, Pressable, LayoutChangeEvent } from 'react-native';
+import { GestureHandlerRootView, PinchGestureHandler, PinchGestureHandlerGestureEvent, State } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import Animated, { useAnimatedGestureHandler, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -37,7 +37,7 @@ const formatTimeAgo = (date: Date) => {
   return Math.floor(seconds) + 's';
 };
 
-const ViewImage = ({ 
+const ViewImage: React.FC<ViewImageProps> = ({ 
   visible, 
   imageUrl, 
   onClose, 
@@ -46,56 +46,28 @@ const ViewImage = ({
   timestamp = new Date(),
   likes = 0,
   caption = ''
-}: ViewImageProps) => {
+}) => {
   const [fullScreen, setFullScreen] = useState(false);
-  const [imageHeight, setImageHeight] = useState(0);
   const [originalWidth, setOriginalWidth] = useState(0);
   const [originalHeight, setOriginalHeight] = useState(0);
 
-  // Zoom animation values
+  // Shared values for animated zoom
   const scale = useSharedValue(1);
-  const savedScale = useSharedValue(1);
 
+  // Handle pinch-to-zoom gestures
   const pinchHandler = useAnimatedGestureHandler<PinchGestureHandlerGestureEvent>({
     onStart: (_, ctx: { startScale: number }) => {
       ctx.startScale = scale.value;
     },
     onActive: (event, ctx) => {
-      scale.value = ctx.startScale * event.scale;
+      scale.value = Math.max(1, Math.min(ctx.startScale * event.scale, 3));
     },
     onEnd: () => {
-      if (scale.value < 1) {
-        scale.value = withSpring(1);
-      } else if (scale.value > 3) {
-        scale.value = withSpring(3);
-      } else {
-        scale.value = withSpring(scale.value);
-      }
+      scale.value = withSpring(1); // Reset zoom when user lifts fingers
     },
   });
 
-  // Remove cropping from the Cloudinary URL and fit the image properly
-  const optimizedImageUrl = imageUrl; // Use the original image URL without cropping
-
-  const handleLongPress = () => {
-    setFullScreen(true);
-  };
-
-  const handleImageLayout = (event: any) => {
-    if (!event?.nativeEvent?.layout) return;
-    
-    const { width, height } = event.nativeEvent.layout;
-    if (width > 0 && height > 0) {
-      const aspectRatio = width / height;
-      const containerWidth = width * 0.8; // 90% of screen width
-      const containerHeight = containerWidth / aspectRatio;
-      
-      setImageHeight(containerHeight);
-      setOriginalWidth(width);
-      setOriginalHeight(height);
-    }
-  };
-
+  // Fetch original image dimensions
   useEffect(() => {
     if (imageUrl) {
       Image.getSize(imageUrl, (width, height) => {
@@ -108,19 +80,17 @@ const ViewImage = ({
   return (
     <Modal
       visible={visible}
-      transparent={true}
+      transparent
       animationType="fade"
       onRequestClose={onClose}
       statusBarTranslucent
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
         <BlurView intensity={100} tint="dark" className="flex-1 justify-center items-center">
-          {/* Clickable background to close */}
-          <Pressable 
-            className="absolute inset-0" 
-            onPress={onClose}
-          />
           
+          {/* Clickable background to close */}
+          <Pressable className="absolute inset-0" onPress={onClose} />
+
           <View className="w-[80%] bg-white rounded-2xl overflow-hidden shadow-2xl">
             <View>
               {/* Header */}
@@ -152,20 +122,27 @@ const ViewImage = ({
               </View>
 
               {/* Image Container */}
-              <PinchGestureHandler onGestureEvent={pinchHandler}>
+              <PinchGestureHandler onGestureEvent={pinchHandler} onHandlerStateChange={(event) => {
+                if (event.nativeEvent.state === State.END) {
+                  scale.value = withSpring(1);
+                }
+              }}>
                 <Animated.View
                   style={{
                     width: '100%',
                     aspectRatio: originalWidth && originalHeight ? originalWidth / originalHeight : 1,
-                    backgroundColor: '#000'
+                    overflow: 'hidden', // Prevent overflow
+                    backgroundColor: '#000',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                 >
                   <Animated.Image
-                    source={{ uri: optimizedImageUrl }}
+                    source={{ uri: imageUrl }}
                     style={{
                       width: '100%',
                       height: '100%',
-                      transform: [{ scale: scale }]
+                      transform: [{ scale: scale }],
                     }}
                     resizeMode="contain"
                   />
@@ -207,14 +184,14 @@ const ViewImage = ({
             </View>
           </View>
 
-          {/* Full Screen Image */}
+          {/* Full-Screen Image */}
           {fullScreen && (
             <Pressable 
               className="absolute inset-0 bg-black justify-center items-center"
               onPress={() => setFullScreen(false)}
             >
               <Image
-                source={{ uri: optimizedImageUrl }}
+                source={{ uri: imageUrl }}
                 style={{
                   width: '100%',
                   height: '100%'
@@ -229,4 +206,4 @@ const ViewImage = ({
   );
 };
 
-export default ViewImage; 
+export default ViewImage;
