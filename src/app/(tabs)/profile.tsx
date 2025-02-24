@@ -18,6 +18,7 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import Feather from '@expo/vector-icons/Feather';
 import { router } from 'expo-router';
 import * as FileSystem from 'expo-file-system';
+import ViewImage from '~/src/Components/viewImage';
 
 const ProfileScreen = () => {
   const { user } = useAuth();
@@ -30,6 +31,7 @@ const ProfileScreen = () => {
   const [postsCount, setPostsCount] = useState(0);
   const [activeTab, setActiveTab] = useState('posts'); // 'posts' or 'saved'
   const { width } = useWindowDimensions();
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -196,6 +198,12 @@ const ProfileScreen = () => {
 
   return (
     <ScrollView className="flex-1 bg-white">
+      <ViewImage
+        visible={!!selectedImage}
+        imageUrl={selectedImage || ''}
+        onClose={() => setSelectedImage(null)}
+      />
+      
       <View className="px-4 py-6">
         {profile && (
           <>
@@ -301,6 +309,7 @@ const ProfileScreen = () => {
                   <TouchableOpacity 
                     key={post.id} 
                     className="w-1/3 aspect-square p-0.5"
+                    onPress={() => setSelectedImage(post.media_url)}
                   >
                     <Image
                       source={{ uri: post.media_url }}
