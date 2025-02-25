@@ -10,6 +10,7 @@ import {
   ScrollView,
   Platform,
   Modal,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '~/src/lib/supabase';
@@ -44,6 +45,7 @@ export default function UserInfo() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isPrivate, setIsPrivate] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     async function loadFont() {
@@ -98,24 +100,17 @@ export default function UserInfo() {
         .single();
 
       if (emailData) {
-        newErrors.email = 'Email already exists';
+        // Redirect to (tabs)/ if email already exists
+        setTimeout(() => {
+          router.replace('/(tabs)/');
+        }, 1000);
+        return false; // Prevent further validation
       }
     }
 
     // Validate phone number
     if (!formData.phoneNumber) {
       newErrors.phoneNumber = 'Phone number is required';
-    } else {
-      const fullPhoneNumber = `${selectedCountry.value}${formData.phoneNumber}`;
-      const { data: phoneData } = await supabase
-        .from('users')
-        .select('phone')
-        .eq('phone', fullPhoneNumber)
-        .single();
-
-      if (phoneData) {
-        newErrors.phoneNumber = 'Phone number already exists';
-      }
     }
 
     // Validate date of birth
@@ -135,18 +130,27 @@ export default function UserInfo() {
 
   const handleSubmit = async () => {
     try {
+      setIsSubmitting(true);
+
+      // Basic validation
       if (!userEmail) {
-        console.error('No user email found');
+        setErrors(prev => ({...prev, email: 'Email is required'}));
+        setIsSubmitting(false);
         return;
       }
 
+      // Validate form
       const isValid = await validateForm();
-      if (!isValid) return;
+      if (!isValid) {
+        setIsSubmitting(false);
+        return;
+      }
 
       // Get the current user's ID from Supabase auth
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         console.error('No authenticated user found');
+        setIsSubmitting(false);
         return;
       }
 
@@ -156,10 +160,11 @@ export default function UserInfo() {
         avatarUrl = await uploadAvatar(formData.avatarUri);
       }
 
+      // Create user profile
       const { data, error } = await supabase
         .from('users')
         .insert([{
-          id: user.id, // Use the authenticated user's ID
+          id: user.id,
           username: formData.username,
           full_name: formData.fullName,
           email: userEmail,
@@ -174,14 +179,22 @@ export default function UserInfo() {
           created_at: new Date().toISOString()
         }]);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating user:', error);
+        setIsSubmitting(false);
+        return; // Stop further execution if there's an error
+      }
+
       console.log('User created:', data);
       
-      // Use Expo Router's router to navigate to tabs
-      router.replace('/(tabs)');
+      // Redirect to (tabs)/ after user info is submitted
+      setTimeout(() => {
+        router.replace('/(tabs)/');
+      }, 1000);
       
     } catch (error) {
       console.error('Error creating user:', error);
+      setIsSubmitting(false);
     }
   };
 
@@ -224,18 +237,6 @@ export default function UserInfo() {
           <Text className="text-lg text-gray-600">
             Let's create your perfect profile
           </Text>
-        </View>
-
-        {/* Profile Picture Section */}
-        <View className="items-center -mt-8">
-          <View className="relative">
-            <View className="w-24 h-24 rounded-full bg-gray-100 items-center justify-center">
-              <Ionicons name="person-outline" size={40} color="#666" />
-            </View>
-            <TouchableOpacity className="absolute bottom-0 right-0 bg-blue-500 w-7 h-7 rounded-full items-center justify-center">
-              <Text className="text-white text-xl">+</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         {/* Form */}
@@ -387,12 +388,17 @@ export default function UserInfo() {
           </View>
 
           <TouchableOpacity 
-            className="bg-blue-500 px-6 py-4 rounded-lg items-center mt-6 mb-8"
+            className={`bg-blue-500 px-6 py-4 rounded-lg items-center mt-6 mb-8 ${isSubmitting ? 'opacity-50' : ''}`}
             onPress={handleSubmit}
+            disabled={isSubmitting}
           >
-            <Text className="text-white text-base font-semibold">
-              Create Profile
-            </Text>
+            {isSubmitting ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text className="text-white text-base font-semibold">
+                Create Profile
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 

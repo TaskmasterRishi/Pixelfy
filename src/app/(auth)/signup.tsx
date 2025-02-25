@@ -33,7 +33,7 @@ export default function SignupPage() {
 
       if (session) {
         setSession(session); // Set the session in context
-        router.push('/(tabs)/profile'); // Redirect to profile
+        router.push('/(tabs)/'); // Redirect to profile
       } else {
         Alert.alert(
           'Verify Your Email',

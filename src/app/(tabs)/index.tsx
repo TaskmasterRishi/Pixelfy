@@ -16,6 +16,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import PostListItem from "~/src/Components/PostListItem";
 import { useFonts } from "expo-font";
 import Ionicons from "react-native-vector-icons/Ionicons";
+import { useAuth } from "~/src/providers/AuthProvider";
 
 const PAGE_SIZE = 5;
 
@@ -26,6 +27,7 @@ export default function FeedScreen() {
   const [lastPostId, setLastPostId] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const router = useRouter();
+  const { user, username } = useAuth();
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const lastScrollY = useRef(0);
@@ -73,6 +75,10 @@ export default function FeedScreen() {
   };
 
   useFocusEffect(() => {
+    if (!user || !username) {
+      router.replace("/(screens)/user_info");
+      return;
+    }
     fetchPosts(true);
   });
 

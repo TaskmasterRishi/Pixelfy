@@ -1,0 +1,9 @@
+android {
+    // ... existing config ...
+    defaultConfig {
+        // ... existing config ...
+        manifestPlaceholders = [
+            permissions: 'android.permission.READ_PHONE_NUMBERS, android.permission.READ_PHONE_STATE'
+        ]
+    }
+} 

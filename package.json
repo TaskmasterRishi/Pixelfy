@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo/vector-icons": "^14.0.2",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native-community/datetimepicker": "8.2.0",
     "@react-native-community/hooks": "^100.1.0",
@@ -24,13 +25,16 @@
     "expo-blur": "~14.0.3",
     "expo-constants": "~17.0.7",
     "expo-crypto": "~14.0.2",
+    "expo-file-system": "~18.0.11",
     "expo-font": "~13.0.4",
     "expo-image": "~2.0.6",
     "expo-image-manipulator": "^13.0.6",
     "expo-image-picker": "~16.0.6",
     "expo-linear-gradient": "~14.0.2",
     "expo-linking": "~7.0.5",
+    "expo-media-library": "~17.0.6",
     "expo-router": "~4.0.17",
+    "expo-sharing": "~13.0.1",
     "expo-splash-screen": "~0.29.22",
     "expo-status-bar": "~2.0.1",
     "moti": "^0.30.0",
@@ -39,6 +43,7 @@
     "react-dom": "18.3.1",
     "react-icons": "^5.5.0",
     "react-native": "0.76.7",
+    "react-native-device-info": "^14.0.4",
     "react-native-gesture-handler": "~2.20.2",
     "react-native-image-filter-kit": "^0.8.0",
     "react-native-picker-select": "^9.3.1",
@@ -48,11 +53,7 @@
     "react-native-web": "~0.19.13",
     "tailwind-react-native-classnames": "^3.0.1",
     "tailwind-rn": "^4.2.0",
-    "uuid": "^11.1.0",
-    "expo-file-system": "~18.0.11",
-    "expo-media-library": "~17.0.6",
-    "@expo/vector-icons": "^14.0.2",
-    "expo-sharing": "~13.0.1"
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

@@ -8,7 +8,8 @@ import {
   ActivityIndicator, 
   Alert, 
   ScrollView,
-  useWindowDimensions 
+  useWindowDimensions,
+  RefreshControl
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '~/src/providers/AuthProvider';
@@ -33,6 +34,7 @@ const ProfileScreen = () => {
   const { width } = useWindowDimensions();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedPost, setSelectedPost] = useState<{ id: string, mediaUrl: string } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -189,6 +191,12 @@ const ProfileScreen = () => {
     }
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchProfile();
+    setRefreshing(false);
+  };
+
   if (isLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
@@ -198,7 +206,12 @@ const ProfileScreen = () => {
   }
 
   return (
-    <ScrollView className="flex-1 bg-white">
+    <ScrollView 
+      className="flex-1 bg-white" 
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
       <ViewImage
         visible={!!selectedPost}
         imageUrl={selectedPost?.mediaUrl || ''}
@@ -255,6 +268,10 @@ const ProfileScreen = () => {
             </View>
 
             {/* Bio */}
+            {profile?.full_name && (
+              <Text className="text-gray-900 px-4 font-bold">{profile.full_name}</Text>
+            )}
+
             {bio && (
               <Text className="text-gray-900 mb-6 px-4">{bio}</Text>
             )}
@@ -306,19 +323,24 @@ const ProfileScreen = () => {
 
             {/* Posts Grid */}
             {activeTab === 'posts' && (
-              <View className="flex-row flex-wrap">
-                {posts.map((post) => (
-                  <TouchableOpacity 
-                    key={post.id} 
-                    className="w-1/3 aspect-square p-0.5"
-                    onPress={() => setSelectedPost({ id: post.id, mediaUrl: post.media_url })}
-                  >
-                    <Image
-                      source={{ uri: post.media_url }}
-                      className="w-full h-full"
-                    />
-                  </TouchableOpacity>
-                ))}
+              <View className="flex-row flex-wrap mt-5" style={{ width: '95%', marginHorizontal: '2.5%' }}>
+                {posts.map((post) => {
+                  // Random height between 100 and 300 for demonstration
+                  const randomHeight = Math.floor(Math.random() * (300 - 100 + 1)) + 100;
+                  return (
+                    <TouchableOpacity 
+                      key={post.id} 
+                      className="w-[31%] mb-2 mx-[1%]"
+                      onPress={() => setSelectedPost({ id: post.id, mediaUrl: post.media_url })}
+                    >
+                      <Image
+                        source={{ uri: post.media_url }}
+                        className="w-full rounded-lg"
+                        style={{ height: randomHeight }}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             )}
 
