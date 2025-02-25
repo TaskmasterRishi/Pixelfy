@@ -1,211 +1,133 @@
 import { useState, useEffect } from 'react';
-import { View, TextInput, FlatList, Pressable, Image, Text, Dimensions, Animated } from 'react-native';
+import { View, TextInput, FlatList, Pressable, Image, Text, Dimensions, ScrollView, ActivityIndicator } from 'react-native';
 import { useAuth } from '../../providers/AuthProvider';
 import { supabase } from '../../lib/supabase';
 import { FontAwesome } from '@expo/vector-icons';
+import MasonryList from '@react-native-seoul/masonry-list';
+import { sendFollowRequest } from '../../utils/follow';
 
 export default function SearchPage() {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [followStatus, setFollowStatus] = useState({});
-  const [isSearching, setIsSearching] = useState(false);
-  const [positions] = useState(() => 
-    searchResults.map(() => ({
-      x: new Animated.Value(Math.random() * Dimensions.get('window').width),
-      y: new Animated.Value(Math.random() * Dimensions.get('window').height)
-    }))
-  );
+  const [publicUsers, setPublicUsers] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fetchPublicUsers = async () => {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, username, avatar_url, bio')
+      .eq('is_private', false)
+      .neq('id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (!error) {
+      setPublicUsers(data);
+    }
+    setIsLoading(false);
+  };
 
   const handleSearch = async (query) => {
     if (query.length > 2) {
-      setIsSearching(true);
+      setIsLoading(true);
       const { data, error } = await supabase
         .from('users')
-        .select('id, username, avatar_url')
+        .select('id, username, avatar_url, bio')
         .ilike('username', `%${query}%`)
         .neq('id', user.id);
       
       if (!error) {
         setSearchResults(data);
       }
+      setIsLoading(false);
     } else {
-      setIsSearching(false);
       setSearchResults([]);
-      fetchRandomUsers();
-    }
-  };
-
-  const fetchRandomUsers = async () => {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, username, avatar_url')
-      .eq('is_private', false)
-      .neq('id', user.id) // Exclude current user
-      .order('created_at', { ascending: false })
-      .limit(5);
-
-    if (!error) {
-      setSearchResults((prevResults) => [...prevResults, ...data]);
+      fetchPublicUsers();
     }
   };
 
   useEffect(() => {
-    fetchRandomUsers();
+    fetchPublicUsers();
   }, []);
 
-  const checkFollowStatus = async (targetUserId) => {
-    const { data, error } = await supabase
-      .from('follow_requests')
-      .select('status')
-      .eq('requester_id', user.id)
-      .eq('target_id', targetUserId)
-      .single();
-
-    if (!error && data) {
-      setFollowStatus(prev => ({ ...prev, [targetUserId]: data.status }));
-    }
-  };
-
-  const handleFollowRequest = async (targetUserId) => {
-    const { error } = await supabase
-      .from('follow_requests')
-      .insert({
-        requester_id: user.id,
-        target_id: targetUserId,
-        status: 'pending'
-      });
-    
-    if (!error) {
-      setFollowStatus(prev => ({ ...prev, [targetUserId]: 'pending' }));
-      alert('Follow request sent!');
-    }
-  };
-
-  useEffect(() => {
-    // Check follow status for each result when searchResults change
-    searchResults.forEach(user => {
-      checkFollowStatus(user.id);
-    });
-  }, [searchResults]);
-
-  useEffect(() => {
-    const animate = () => {
-      positions.forEach((pos, index) => {
-        if (searchResults[index]) {
-          Animated.parallel([
-            Animated.timing(pos.x, {
-              toValue: Math.random() * (Dimensions.get('window').width - 100),
-              duration: 5000 + Math.random() * 5000,
-              useNativeDriver: true,
-            }),
-            Animated.timing(pos.y, {
-              toValue: Math.random() * (Dimensions.get('window').height - 200),
-              duration: 5000 + Math.random() * 5000,
-              useNativeDriver: true,
-            })
-          ]).start(() => animate());
-        }
-      });
-    };
-
-    if (!isSearching) {
-      animate();
-    }
-  }, [positions, isSearching, searchResults]);
+  const renderUserCard = (user) => (
+    <View key={user.id} className="w-[48%] mb-4 bg-white rounded-lg shadow-sm p-3">
+      <View className="items-center">
+        <View className="w-20 h-20 rounded-full overflow-hidden border-2 border-white shadow-md">
+          {user.avatar_url ? (
+            <Image
+              source={{ uri: user.avatar_url }}
+              className="w-full h-full"
+              resizeMode="cover"
+            />
+          ) : (
+            <View className="w-full h-full bg-gray-200 justify-center items-center">
+              <FontAwesome name="user" size={24} color="#6b7280" />
+            </View>
+          )}
+        </View>
+        <Text className="font-semibold mt-2 text-center" numberOfLines={1}>
+          {user.username}
+        </Text>
+        {user.bio && (
+          <Text className="text-gray-600 text-xs text-center mt-1" numberOfLines={2}>
+            {user.bio}
+          </Text>
+        )}
+        <Pressable 
+          className="mt-3 bg-blue-500 px-3 py-1 rounded-full"
+          onPress={() => sendFollowRequest(user.id)}
+        >
+          <Text className="text-white text-xs">Follow</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
 
   return (
-    <View style={{ padding: 8, backgroundColor: '#fff', flex: 1 }}>
-      <TextInput
-        style={{ 
-          height: 40, 
-          backgroundColor: '#f0f0f0', 
-          borderRadius: 8, 
-          padding: 10, 
-          marginBottom: 8,
-          color: '#000',
-          fontSize: 14
-        }}
-        placeholder="Search users..."
-        placeholderTextColor="#888"
-        value={searchQuery}
-        onChangeText={(text) => {
-          setSearchQuery(text);
-          handleSearch(text);
-        }}
-      />
-      
-      <View style={{ flex: 1 }}>
-        {searchResults.map((item, index) => (
-          <Animated.View
-            key={item.id}
-            style={{
-              position: 'absolute',
-              transform: [
-                { translateX: positions[index]?.x || 0 },
-                { translateY: positions[index]?.y || 0 }
-              ],
-              alignItems: 'center',
-              width: 100
-            }}
-          >
-            <View style={{ 
-              width: 80,
-              height: 80,
-              borderRadius: 40,
-              overflow: 'hidden',
-              backgroundColor: '#f0f0f0',
-              justifyContent: 'center',
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor: '#e0e0e0'
-            }}>
-              {item.avatar_url ? (
-                <Image
-                  source={{ uri: item.avatar_url }}
-                  style={{ width: '100%', height: '100%' }}
-                />
-              ) : (
-                <FontAwesome name="user" size={30} color="#888" />
-              )}
-            </View>
-            
-            <Text 
-              style={{ 
-                color: '#000', 
-                fontSize: 12, 
-                marginTop: 4,
-                marginBottom: 4
-              }}
-              numberOfLines={1}
-            >
-              {item.username}
-            </Text>
-
-            <Pressable
-              style={{
-                maxWidth: 100,
-                paddingVertical: 4,
-                paddingHorizontal: 12,
-                backgroundColor: followStatus[item.id] === 'pending' ? '#f0f0f0' : '#3897f0',
-                borderRadius: 4,
-                alignSelf: 'center'
-              }}
-              onPress={() => handleFollowRequest(item.id)}
-              disabled={followStatus[item.id] === 'pending'}
-            >
-              <Text style={{ 
-                color: followStatus[item.id] === 'pending' ? '#888' : '#fff', 
-                fontSize: 12, 
-                fontWeight: 'bold',
-                textAlign: 'center'
-              }}>
-                {followStatus[item.id] === 'pending' ? 'Requested' : 'Follow'}
-              </Text>
-            </Pressable>
-          </Animated.View>
-        ))}
+    <View className="flex-1 bg-gray-50">
+      {/* Header */}
+      <View className="flex-row items-center justify-between px-4 pt-4 pb-2 bg-white border-b border-gray-200">
+        <Text className="text-xl font-bold">Search</Text>
+        <FontAwesome name="search" size={20} color="black" />
       </View>
+
+      {/* Search Bar */}
+      <View className="p-4 bg-white">
+        <TextInput
+          className="h-12 bg-gray-100 text-gray-800 rounded-lg px-4"
+          placeholder="Search users..."
+          placeholderTextColor="#999"
+          value={searchQuery}
+          onChangeText={(text) => {
+            setSearchQuery(text);
+            handleSearch(text);
+          }}
+        />
+      </View>
+
+      {isLoading ? (
+        <View className="flex-1 justify-center items-center">
+          <ActivityIndicator size="large" color="#000" />
+        </View>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false} className="p-2">
+          {searchResults.length > 0 ? (
+            <View className="flex-row flex-wrap justify-between px-2">
+              {searchResults.map(renderUserCard)}
+            </View>
+          ) : (
+            <>
+              <Text className="text-lg font-semibold px-4 mb-2">Public Profiles</Text>
+              <View className="flex-row flex-wrap justify-between px-2">
+                {publicUsers.map(renderUserCard)}
+              </View>
+            </>
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 } 
