@@ -21,6 +21,19 @@ import { router } from 'expo-router';
 import * as FileSystem from 'expo-file-system';
 import ViewImage from '~/src/Components/viewImage';
 
+// Define the Post type
+type Post = {
+  id: string;
+  media_url: string;
+  caption: string;
+  created_at: string;
+  user: {
+    username: string;
+    avatar_url: string;
+  };
+  likes_count: number;
+};
+
 const ProfileScreen = () => {
   const { user } = useAuth();
   const [profile, setProfile] = useState<any>(null);
@@ -28,13 +41,24 @@ const ProfileScreen = () => {
   const [bio, setBio] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [posts, setPosts] = useState([]);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [postsCount, setPostsCount] = useState(0);
   const [activeTab, setActiveTab] = useState('posts'); // 'posts' or 'saved'
   const { width } = useWindowDimensions();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [selectedPost, setSelectedPost] = useState<{ id: string, mediaUrl: string } | null>(null);
+  const [selectedPost, setSelectedPost] = useState<{
+    id: string;
+    mediaUrl: string;
+    username: string;
+    avatarUrl: string;
+    timestamp: string;
+    caption: string;
+    likesCount: number;
+    comments: any[];
+  } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMorePosts, setHasMorePosts] = useState(true);
 
   useEffect(() => {
     if (user) {
@@ -45,37 +69,42 @@ const ProfileScreen = () => {
   const fetchProfile = async () => {
     setIsLoading(true);
     try {
-      // Fetch user data
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id, username, full_name, email, avatar_url, bio, website, is_private, verified')
-        .eq('id', user.id)
-        .single();
+      const [profileResponse, postsResponse] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, username, full_name, email, avatar_url, bio, website, is_private, verified')
+          .eq('id', user.id)
+          .single(),
+        supabase
+          .from('posts')
+          .select(`
+            id, 
+            media_url, 
+            caption, 
+            created_at, 
+            user:users(username, avatar_url),
+            likes:likes(count)
+          `)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .range(0, 9) // Only fetch first 10 posts initially
+      ]);
 
-      if (userError) throw userError;
+      if (profileResponse.error) throw profileResponse.error;
+      if (postsResponse.error) throw postsResponse.error;
 
-      setProfile(userData);
-      setUsername(userData.username || '');
-      setBio(userData.bio || '');
+      setProfile(profileResponse.data);
+      setUsername(profileResponse.data.username || '');
+      setBio(profileResponse.data.bio || '');
 
-      // Fetch posts count
-      const { count, error: countError } = await supabase
-        .from('posts')
-        .select('id', { count: 'exact' })
-        .eq('user_id', user.id);
+      const processedPosts = postsResponse.data.map(post => ({
+        ...post,
+        likes_count: post.likes[0]?.count || 0
+      }));
 
-      if (countError) throw countError;
-      setPostsCount(count || 0);
-
-      // Fetch posts
-      const { data: postsData, error: postsError } = await supabase
-        .from('posts')
-        .select('id, media_url, caption, created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (postsError) throw postsError;
-      setPosts(postsData || []);
+      setPosts(processedPosts || []);
+      setPostsCount(processedPosts.length || 0);
+      setHasMorePosts(processedPosts.length >= 10);
 
     } catch (error) {
       console.error('Error fetching profile data:', error.message);
@@ -197,6 +226,43 @@ const ProfileScreen = () => {
     setRefreshing(false);
   };
 
+  const loadMorePosts = async () => {
+    if (!hasMorePosts) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .select(`
+          id, 
+          media_url, 
+          caption, 
+          created_at, 
+          user:users(username, avatar_url),
+          likes:likes(count)
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .range(page * 10, (page + 1) * 10 - 1);
+
+      if (error) throw error;
+
+      if (data.length > 0) {
+        const processedPosts = data.map(post => ({
+          ...post,
+          likes_count: post.likes[0]?.count || 0
+        }));
+
+        setPosts(prev => [...prev, ...processedPosts]);
+        setPage(prev => prev + 1);
+        setHasMorePosts(data.length >= 10);
+      } else {
+        setHasMorePosts(false);
+      }
+    } catch (error) {
+      console.error('Error loading more posts:', error);
+    }
+  };
+
   if (isLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
@@ -211,12 +277,24 @@ const ProfileScreen = () => {
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
+      onScroll={({ nativeEvent }) => {
+        if (isCloseToBottom(nativeEvent)) {
+          loadMorePosts();
+        }
+      }}
+      scrollEventThrottle={400}
     >
       <ViewImage
         visible={!!selectedPost}
         imageUrl={selectedPost?.mediaUrl || ''}
         postId={selectedPost?.id}
         onClose={() => setSelectedPost(null)}
+        username={selectedPost?.username}
+        avatarUrl={selectedPost?.avatarUrl}
+        timestamp={selectedPost?.timestamp}
+        caption={selectedPost?.caption}
+        likesCount={selectedPost?.likesCount}
+        initialComments={[]}
       />
       
       <View className="px-4 py-6">
@@ -323,24 +401,31 @@ const ProfileScreen = () => {
 
             {/* Posts Grid */}
             {activeTab === 'posts' && (
-              <View className="flex-row flex-wrap mt-5" style={{ width: '95%', marginHorizontal: '2.5%' }}>
-                {posts.map((post) => {
-                  // Random height between 100 and 300 for demonstration
-                  const randomHeight = Math.floor(Math.random() * (300 - 100 + 1)) + 100;
-                  return (
-                    <TouchableOpacity 
-                      key={post.id} 
-                      className="w-[31%] mb-2 mx-[1%]"
-                      onPress={() => setSelectedPost({ id: post.id, mediaUrl: post.media_url })}
-                    >
+              <View className="flex-row flex-wrap mt-5" style={{ width: '100%' }}>
+                {posts.map((post) => (
+                  <TouchableOpacity 
+                    key={post.id} 
+                    className="w-[48%] mb-2 mx-[1%]"
+                    onPress={() => setSelectedPost({
+                      id: post.id,
+                      mediaUrl: post.media_url,
+                      username: post.user.username,
+                      avatarUrl: post.user.avatar_url,
+                      timestamp: post.created_at,
+                      caption: post.caption,
+                      likesCount: post.likes_count,
+                      comments: []
+                    })}
+                  >
+                    <View className="aspect-square rounded-lg shadow-sm bg-gray-100 overflow-hidden">
                       <Image
                         source={{ uri: post.media_url }}
-                        className="w-full rounded-lg"
-                        style={{ height: randomHeight }}
+                        className="w-full h-full"
+                        style={{ resizeMode: 'cover' }}
                       />
-                    </TouchableOpacity>
-                  );
-                })}
+                    </View>
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
 
@@ -372,8 +457,22 @@ const ProfileScreen = () => {
           </>
         )}
       </View>
+
+      {/* Add loading indicator at the bottom */}
+      {hasMorePosts && (
+        <View className="py-4">
+          <ActivityIndicator size="small" color="#0ea5e9" />
+        </View>
+      )}
     </ScrollView>
   );
+};
+
+// Helper function to check if user is close to bottom
+const isCloseToBottom = ({ layoutMeasurement, contentOffset, contentSize }) => {
+  const paddingToBottom = 20;
+  return layoutMeasurement.height + contentOffset.y >=
+    contentSize.height - paddingToBottom;
 };
 
 export default ProfileScreen;

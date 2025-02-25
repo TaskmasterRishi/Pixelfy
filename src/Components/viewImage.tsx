@@ -26,6 +26,12 @@ interface ViewImageProps {
   imageUrl: string;
   onClose: () => void;
   postId?: string;
+  username?: string;
+  avatarUrl?: string;
+  timestamp?: string;
+  caption?: string;
+  likesCount?: number;
+  initialComments?: Comment[];
 }
 
 const formatTimeAgo = (date: Date) => {
@@ -53,7 +59,13 @@ const ViewImage: React.FC<ViewImageProps> = ({
   visible, 
   imageUrl, 
   onClose,
-  postId
+  postId,
+  username,
+  avatarUrl,
+  timestamp,
+  caption,
+  likesCount = 0,
+  initialComments = []
 }) => {
   const [fullScreen, setFullScreen] = useState(false);
   const [originalWidth, setOriginalWidth] = useState(0);
@@ -66,25 +78,25 @@ const ViewImage: React.FC<ViewImageProps> = ({
     likesCount: number;
     caption: string;
   } | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [newComment, setNewComment] = useState('');
+  const [comments, setComments] = useState<Comment[]>(initialComments);
   const [showOptions, setShowOptions] = useState(false);
+  const optionsPanelY = useSharedValue(500); // Start off screen
 
   // Shared values for animated zoom
   const scale = useSharedValue(1);
 
-  // Handle pinch-to-zoom gestures
-  const pinchHandler = useAnimatedGestureHandler<PinchGestureHandlerGestureEvent>({
-    onStart: (_, ctx: { startScale: number }) => {
-      ctx.startScale = scale.value;
-    },
-    onActive: (event, ctx) => {
-      scale.value = Math.max(1, Math.min(ctx.startScale * event.scale, 3));
-    },
-    onEnd: () => {
-      scale.value = withSpring(1); // Reset zoom when user lifts fingers
-    },
-  });
+  // Add loading state
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Reset all data when the modal is closed
+  useEffect(() => {
+    if (!visible) {
+      setPostData(null);
+      setComments([]);
+      setShowOptions(false);
+      scale.value = 1;
+    }
+  }, [visible]);
 
   // Fetch original image dimensions
   useEffect(() => {
@@ -96,59 +108,27 @@ const ViewImage: React.FC<ViewImageProps> = ({
     }
   }, [imageUrl]);
 
-  // Fetch post data when postId changes
+  // Only fetch additional data if needed
   useEffect(() => {
-    const fetchPostData = async () => {
+    const fetchAdditionalData = async () => {
       if (!postId) return;
       
       try {
-        // First, fetch post details and user info
-        const { data: postData, error: postError } = await supabase
-          .from('posts')
-          .select(`
-            id,
-            caption,
-            created_at,
-            users (
-              username,
-              avatar_url
-            )
-          `)
-          .eq('id', postId)
-          .single();
-
-        if (postError) throw postError;
-
-        // Then, count likes for this post
+        // Fetch updated likes count
         const { count: likesCount, error: likesError } = await supabase
           .from('likes')
           .select('id', { count: 'exact' })
           .eq('post_id', postId);
 
-        if (likesError) throw likesError;
+        if (!likesError && postData) {
+          setPostData(prev => prev ? {
+            ...prev,
+            likesCount: likesCount || 0
+          } : null);
+        }
 
-        setPostData({
-          username: postData.users.username,
-          avatarUrl: postData.users.avatar_url,
-          timestamp: new Date(postData.created_at),
-          likesCount: likesCount || 0,
-          caption: postData.caption || '',
-        });
-      } catch (error) {
-        console.error('Error fetching post data:', error);
-      }
-    };
-
-    fetchPostData();
-  }, [postId]);
-
-  // Add comments fetch
-  useEffect(() => {
-    const fetchComments = async () => {
-      if (!postId) return;
-      
-      try {
-        const { data, error } = await supabase
+        // Fetch updated comments if needed
+        const { data: commentsData, error: commentsError } = await supabase
           .from('comments')
           .select(`
             id,
@@ -162,66 +142,40 @@ const ViewImage: React.FC<ViewImageProps> = ({
           .eq('post_id', postId)
           .order('created_at', { ascending: true });
 
-        if (error) throw error;
+        if (!commentsError) {
+          setComments(commentsData.map(comment => ({
+            id: comment.id,
+            user: {
+              username: comment.users.username,
+              avatar_url: comment.users.avatar_url
+            },
+            content: comment.content,
+            created_at: comment.created_at
+          })));
+        }
 
-        setComments(data.map(comment => ({
-          id: comment.id,
-          user: {
-            username: comment.users.username,
-            avatar_url: comment.users.avatar_url
-          },
-          content: comment.content,
-          created_at: comment.created_at
-        })));
       } catch (error) {
-        console.error('Error fetching comments:', error);
+        console.error('Error fetching additional data:', error);
       }
     };
 
-    fetchComments();
-  }, [postId]);
-
-  const handleAddComment = async () => {
-    if (!newComment.trim() || !postId || !user || !currentUsername) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('comments')
-        .insert({
-          post_id: postId,
-          user_id: user.id,
-          content: newComment.trim()
-        })
-        .select(`
-          id,
-          content,
-          created_at,
-          users (
-            username,
-            avatar_url
-          )
-        `)
-        .single();
-
-      if (error) throw error;
-
-      // Add new comment to state using current user's username
-      setComments(prev => [...prev, {
-        id: data.id,
-        user: {
-          username: currentUsername,
-          avatar_url: data.users.avatar_url
-        },
-        content: data.content,
-        created_at: data.created_at
-      }]);
-
-      setNewComment('');
-    } catch (error) {
-      console.error('Error adding comment:', error);
-      Alert.alert('Error', 'Failed to add comment');
+    if (visible && postId) {
+      fetchAdditionalData();
     }
-  };
+  }, [visible, postId]);
+
+  // Handle pinch-to-zoom gestures
+  const pinchHandler = useAnimatedGestureHandler<PinchGestureHandlerGestureEvent>({
+    onStart: (_, ctx: { startScale: number }) => {
+      ctx.startScale = scale.value;
+    },
+    onActive: (event, ctx) => {
+      scale.value = Math.max(1, Math.min(ctx.startScale * event.scale, 3));
+    },
+    onEnd: () => {
+      scale.value = withSpring(1); // Reset zoom when user lifts fingers
+    },
+  });
 
   const handleDownload = async () => {
     try {
@@ -302,6 +256,27 @@ const ViewImage: React.FC<ViewImageProps> = ({
     );
   };
 
+  useEffect(() => {
+    if (username && avatarUrl && timestamp && caption && likesCount !== undefined) {
+      setPostData({
+        username,
+        avatarUrl,
+        timestamp: new Date(timestamp),
+        likesCount,
+        caption
+      });
+    }
+  }, [username, avatarUrl, timestamp, caption, likesCount]);
+
+  // Add this useEffect for animation
+  useEffect(() => {
+    if (showOptions) {
+      optionsPanelY.value = withSpring(0, { damping: 15 });
+    } else {
+      optionsPanelY.value = withSpring(500, { damping: 15 });
+    }
+  }, [showOptions]);
+
   return (
     <Modal
       visible={visible}
@@ -311,7 +286,7 @@ const ViewImage: React.FC<ViewImageProps> = ({
       statusBarTranslucent
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <BlurView intensity={100} tint="dark" className="flex-1 justify-center items-center">
+        <BlurView intensity={2000} tint="dark" className="flex-1 justify-center items-center">
           
           {/* Clickable background to close */}
           <Pressable className="absolute inset-0" onPress={onClose} />
@@ -426,27 +401,6 @@ const ViewImage: React.FC<ViewImageProps> = ({
                 <Text className="text-black font-semibold mb-2">
                   {postData?.likesCount.toLocaleString() || 0} likes
                 </Text>
-
-                {/* Add Comment Input */}
-                <View className="flex-row items-center border-t border-gray-200 pt-2">
-                  <TextInput
-                    className="flex-1 px-2 py-1"
-                    placeholder="Add a comment..."
-                    value={newComment}
-                    onChangeText={setNewComment}
-                    multiline
-                  />
-                  <TouchableOpacity 
-                    onPress={handleAddComment}
-                    disabled={!newComment.trim()}
-                  >
-                    <Text className={`font-semibold ${
-                      newComment.trim() ? 'text-blue-500' : 'text-blue-200'
-                    }`}>
-                      Post
-                    </Text>
-                  </TouchableOpacity>
-                </View>
               </View>
             </View>
           </View>
@@ -468,61 +422,74 @@ const ViewImage: React.FC<ViewImageProps> = ({
             </Pressable>
           )}
 
-          {/* Options Modal - Move outside the main view but inside BlurView */}
-          {showOptions && (
-            <View className="absolute inset-0 bg-black/50">
-              <Pressable 
-                className="flex-1"
+          {/* Options Modal - Updated with animation */}
+          <View className="absolute inset-0" pointerEvents={showOptions ? 'auto' : 'none'}>
+            <Pressable 
+              className="flex-1"
+              onPress={() => setShowOptions(false)}
+              style={{ 
+                opacity: showOptions ? 1 : 0,
+                backgroundColor: showOptions ? 'rgba(0,0,0,0.5)' : 'transparent'
+              }}
+            />
+            <Animated.View 
+              style={{ 
+                transform: [{ translateY: optionsPanelY }],
+                backgroundColor: 'white',
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0
+              }}
+            >
+              <View className="w-12 h-1 bg-gray-300 rounded-full mx-auto my-3" />
+              
+              {/* Show delete option only if current user is the post owner */}
+              {postData?.username === currentUsername && (
+                <TouchableOpacity 
+                  onPress={() => {
+                    setShowOptions(false);
+                    handleDeletePost();
+                  }}
+                  className="flex-row items-center px-6 py-4 border-b border-gray-200"
+                >
+                  <Feather name="trash-2" size={24} color="red" />
+                  <Text className="ml-4 text-red-500 font-semibold">Delete Post</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity 
+                onPress={() => {
+                  setShowOptions(false);
+                  handleDownload();
+                }}
+                className="flex-row items-center px-6 py-4 border-b border-gray-200"
+              >
+                <Feather name="download" size={24} color="black" />
+                <Text className="ml-4">Save to Gallery</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                onPress={() => {
+                  setShowOptions(false);
+                  handleShare();
+                }}
+                className="flex-row items-center px-6 py-4 border-b border-gray-200"
+              >
+                <Feather name="share-2" size={24} color="black" />
+                <Text className="ml-4">Share</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
                 onPress={() => setShowOptions(false)}
-              />
-              <View className="bg-white rounded-t-3xl">
-                <View className="w-12 h-1 bg-gray-300 rounded-full mx-auto my-3" />
-                
-                {/* Show delete option only if current user is the post owner */}
-                {postData?.username === currentUsername && (
-                  <TouchableOpacity 
-                    onPress={() => {
-                      setShowOptions(false);
-                      handleDeletePost();
-                    }}
-                    className="flex-row items-center px-6 py-4 border-b border-gray-200"
-                  >
-                    <Feather name="trash-2" size={24} color="red" />
-                    <Text className="ml-4 text-red-500 font-semibold">Delete Post</Text>
-                  </TouchableOpacity>
-                )}
-
-                <TouchableOpacity 
-                  onPress={() => {
-                    setShowOptions(false);
-                    handleDownload();
-                  }}
-                  className="flex-row items-center px-6 py-4 border-b border-gray-200"
-                >
-                  <Feather name="download" size={24} color="black" />
-                  <Text className="ml-4">Save to Gallery</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  onPress={() => {
-                    setShowOptions(false);
-                    handleShare();
-                  }}
-                  className="flex-row items-center px-6 py-4 border-b border-gray-200"
-                >
-                  <Feather name="share-2" size={24} color="black" />
-                  <Text className="ml-4">Share</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  onPress={() => setShowOptions(false)}
-                  className="px-6 py-4 mb-6"
-                >
-                  <Text className="text-center text-gray-500">Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
+                className="px-6 py-4 mb-6"
+              >
+                <Text className="text-center text-gray-500">Cancel</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
         </BlurView>
       </GestureHandlerRootView>
     </Modal>

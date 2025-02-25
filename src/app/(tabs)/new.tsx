@@ -23,42 +23,30 @@ export default function CreatePost() {
         return;
       }
 
-      // Launch image picker
+      // Launch image picker with cropping
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.5,
+        allowsEditing: true, // Enable cropping
       });
 
       if (!result.canceled && result.assets?.length > 0) {
         const selectedImage = result.assets[0];
         
-
         // Check image type
         if (!selectedImage.uri.toLowerCase().match(/\.(jpg|jpeg|png|gif)$/)) {
           alert('Only JPG, PNG, and GIF images are allowed');
           return;
         }
 
-        setLoading(true);
-        await uploadAndSetImage(selectedImage.uri);
+        // Set local image URI without uploading
+        setImage(selectedImage.uri);
       }
     } catch (error) {
       console.error('Image picker error:', error);
       alert('Failed to select image. Please try again.');
       setLoading(false);
     }
-  };
-
-  const uploadAndSetImage = async (selectedImage) => {
-    setLoading(true);
-    const response = await uploadImage(selectedImage);
-
-    if (response) {
-      setImage(response);
-    } else {
-      alert("Image upload failed, please try again.");
-    }
-    setLoading(false);
   };
 
   const createPost = async () => {
@@ -72,6 +60,12 @@ export default function CreatePost() {
     try {
       if (!session || !session.user) {
         throw new Error("No active session found");
+      }
+
+      // Upload image only when sharing
+      const uploadedImage = await uploadImage(image);
+      if (!uploadedImage) {
+        throw new Error("Image upload failed");
       }
 
       const { data: userData, error: userError } = await supabase
@@ -89,7 +83,7 @@ export default function CreatePost() {
         .insert([{ 
           user_id: session.user.id,
           caption,
-          media_url: image,
+          media_url: uploadedImage,
           media_type: "image",
           created_at: new Date().toISOString()
         }])
@@ -109,14 +103,6 @@ export default function CreatePost() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    return () => {
-      if (image) {
-        deleteImage(image);
-      }
-    };
-  }, [image]);
 
   return (
     <View className="flex-1 bg-white">
