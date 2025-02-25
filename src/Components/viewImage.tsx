@@ -73,11 +73,20 @@ const ViewImage: React.FC<ViewImageProps> = ({
   const { user, username: currentUsername } = useAuth();
   const [postData, setPostData] = useState<{
     username: string;
-    avatarUrl: string;
-    timestamp: Date;
+    avatarUrl: string | null;
+    timestamp: Date | null;
     likesCount: number;
-    caption: string;
-  } | null>(null);
+    caption: string | null;
+  } | null>(() => {
+    // Initialize with default values even if some props are empty
+    return {
+      username: username || 'Unknown',
+      avatarUrl: avatarUrl || null,
+      timestamp: timestamp ? new Date(timestamp) : null,
+      likesCount: likesCount || 0,
+      caption: caption || null
+    };
+  });
   const [comments, setComments] = useState<Comment[]>(initialComments);
   const [showOptions, setShowOptions] = useState(false);
   const optionsPanelY = useSharedValue(500); // Start off screen
@@ -163,6 +172,17 @@ const ViewImage: React.FC<ViewImageProps> = ({
       fetchAdditionalData();
     }
   }, [visible, postId]);
+
+  // Update postData when props change
+  useEffect(() => {
+    setPostData({
+      username: username || 'Unknown',
+      avatarUrl: avatarUrl || null,
+      timestamp: timestamp ? new Date(timestamp) : null,
+      likesCount: likesCount || 0,
+      caption: caption || null
+    });
+  }, [username, avatarUrl, timestamp, caption, likesCount]);
 
   // Handle pinch-to-zoom gestures
   const pinchHandler = useAnimatedGestureHandler<PinchGestureHandlerGestureEvent>({
@@ -256,18 +276,6 @@ const ViewImage: React.FC<ViewImageProps> = ({
     );
   };
 
-  useEffect(() => {
-    if (username && avatarUrl && timestamp && caption && likesCount !== undefined) {
-      setPostData({
-        username,
-        avatarUrl,
-        timestamp: new Date(timestamp),
-        likesCount,
-        caption
-      });
-    }
-  }, [username, avatarUrl, timestamp, caption, likesCount]);
-
   // Add this useEffect for animation
   useEffect(() => {
     if (showOptions) {
@@ -311,9 +319,9 @@ const ViewImage: React.FC<ViewImageProps> = ({
                     </View>
                   )}
                   <View className="ml-3">
-                    <Text className="text-black font-semibold">{postData?.username || 'Loading...'}</Text>
+                    <Text className="text-black font-semibold">{postData?.username || 'Unknown'}</Text>
                     <Text className="text-gray-500 text-xs">
-                      {postData?.timestamp ? formatTimeAgo(postData.timestamp) : ''}
+                      {postData?.timestamp ? formatTimeAgo(postData.timestamp) : 'Just now'}
                     </Text>
                   </View>
                 </View>

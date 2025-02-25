@@ -263,6 +263,23 @@ const ProfileScreen = () => {
     }
   };
 
+  const handlePostPress = (post: Post) => {
+    // Create a new object with all required data
+    const postData = {
+      id: post.id,
+      mediaUrl: post.media_url,
+      username: post.user.username,
+      avatarUrl: post.user.avatar_url,
+      timestamp: post.created_at,
+      caption: post.caption,
+      likesCount: post.likes_count,
+      comments: []
+    };
+    
+    // Set the selected post data
+    setSelectedPost(postData);
+  };
+
   if (isLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
@@ -406,16 +423,7 @@ const ProfileScreen = () => {
                   <TouchableOpacity 
                     key={post.id} 
                     className="w-[48%] mb-2 mx-[1%]"
-                    onPress={() => setSelectedPost({
-                      id: post.id,
-                      mediaUrl: post.media_url,
-                      username: post.user.username,
-                      avatarUrl: post.user.avatar_url,
-                      timestamp: post.created_at,
-                      caption: post.caption,
-                      likesCount: post.likes_count,
-                      comments: []
-                    })}
+                    onPress={() => handlePostPress(post)}
                   >
                     <View className="aspect-square rounded-lg shadow-sm bg-gray-100 overflow-hidden">
                       <Image
