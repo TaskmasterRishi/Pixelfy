@@ -6,6 +6,7 @@ import { useAuth } from "~/src/providers/AuthProvider";
 import { router } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
 import { uploadImage, deleteImage } from "~/src/lib/cloudinary";
+import * as ImageManipulator from 'expo-image-manipulator';
 const { width, height } = Dimensions.get("window");
 
 export default function CreatePost() {
@@ -26,8 +27,8 @@ export default function CreatePost() {
       // Launch image picker with cropping
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.5,
-        allowsEditing: true, // Enable cropping
+        quality: 0.7,
+        allowsEditing: true,
       });
 
       if (!result.canceled && result.assets?.length > 0) {
@@ -39,8 +40,18 @@ export default function CreatePost() {
           return;
         }
 
-        // Set local image URI without uploading
-        setImage(selectedImage.uri);
+        // Compress and resize the image
+        const manipulatedImage = await ImageManipulator.manipulateAsync(
+          selectedImage.uri,
+          [{ resize: { width: 1080 } }],
+          {
+            compress: 0.6,
+            format: ImageManipulator.SaveFormat.JPEG,
+          }
+        );
+
+        // Set the processed image
+        setImage(manipulatedImage.uri);
       }
     } catch (error) {
       console.error('Image picker error:', error);
