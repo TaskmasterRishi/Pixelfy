@@ -11,58 +11,43 @@ const { width, height } = Dimensions.get("window");
 
 export default function CreatePost() {
   const [caption, setCaption] = useState("");
-  const [image, setImage] = useState(null);
+  const [media, setMedia] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [postType, setPostType] = useState('post'); // 'post', 'story', or 'reel'
   const { session } = useAuth();
+  const [selectedMedia, setSelectedMedia] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
-  const pickImage = async () => {
+  const pickMedia = async (type = 'image') => {
     try {
-      // Request permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         alert('Sorry, we need camera roll permissions to make this work!');
         return;
       }
 
-      // Launch image picker with cropping
       let result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: type === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images,
         quality: 0.7,
         allowsEditing: true,
+        allowsMultipleSelection: true,
+        selectionLimit: 3
       });
 
       if (!result.canceled && result.assets?.length > 0) {
-        const selectedImage = result.assets[0];
-        
-        // Check image type
-        if (!selectedImage.uri.toLowerCase().match(/\.(jpg|jpeg|png|gif)$/)) {
-          alert('Only JPG, PNG, and GIF images are allowed');
-          return;
-        }
-
-        // Compress and resize the image
-        const manipulatedImage = await ImageManipulator.manipulateAsync(
-          selectedImage.uri,
-          [{ resize: { width: 1080 } }],
-          {
-            compress: 0.6,
-            format: ImageManipulator.SaveFormat.JPEG,
-          }
-        );
-
-        // Set the processed image
-        setImage(manipulatedImage.uri);
+        setSelectedMedia(result.assets);
+        setMedia(result.assets[0].uri);
       }
     } catch (error) {
-      console.error('Image picker error:', error);
-      alert('Failed to select image. Please try again.');
+      console.error('Media picker error:', error);
+      alert('Failed to select media. Please try again.');
       setLoading(false);
     }
   };
 
-  const createPost = async () => {
-    if (!image) {
-      alert("Please select an image first.");
+  const createContent = async () => {
+    if (selectedMedia.length === 0) {
+      alert("Please select media first.");
       return;
     }
 
@@ -73,43 +58,37 @@ export default function CreatePost() {
         throw new Error("No active session found");
       }
 
-      // Upload image only when sharing
-      const uploadedImage = await uploadImage(image);
-      if (!uploadedImage) {
-        throw new Error("Image upload failed");
-      }
+      const uploadPromises = selectedMedia.map(async (media) => {
+        const uploadedMedia = await uploadImage(media.uri);
+        if (!uploadedMedia) {
+          throw new Error("Media upload failed");
+        }
+        return uploadedMedia;
+      });
 
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id, username, avatar_url, verified')
-        .eq('id', session.user.id)
-        .single();
+      const uploadedMediaUrls = await Promise.all(uploadPromises);
 
-      if (userError || !userData) {
-        throw new Error("User data not found");
-      }
+      const table = postType === 'story' ? 'stories' : postType === 'reel' ? 'reels' : 'posts';
+      
+      const contentData = uploadedMediaUrls.map((mediaUrl) => ({
+        user_id: session.user.id,
+        created_at: new Date().toISOString(),
+        media_url: mediaUrl,
+        caption: caption,
+        ...(postType === 'post' && { media_type: mediaUrl.includes('video') ? 'video' : 'image' })
+      }));
 
-      const { data, error } = await supabase
-        .from("posts")
-        .insert([{ 
-          user_id: session.user.id,
-          caption,
-          media_url: uploadedImage,
-          media_type: "image",
-          created_at: new Date().toISOString()
-        }])
-        .select();
+      const { error } = await supabase
+        .from(table)
+        .insert(contentData);
 
       if (error) {
         throw error;
       }
 
-      const postId = data[0].id;
-      console.log('Created post with ID:', postId);
-
       router.push("/(tabs)?refresh=true");
     } catch (error) {
-      alert("Error creating post: " + error.message);
+      alert(`Error creating ${postType}: ` + error.message);
     } finally {
       setLoading(false);
     }
@@ -117,33 +96,91 @@ export default function CreatePost() {
 
   return (
     <View className="flex-1 bg-white">
-      <TouchableOpacity 
-        onPress={pickImage} 
-        className="flex-1 justify-center items-center bg-gray-50"
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator size="large" color="#999" />
-        ) : image ? (
-          <Image
-            source={{ uri: image }}
-            className="w-full"
-            style={{ height: height * 0.6 }}
-            resizeMode="contain"
-          />
-        ) : (
-          <View className="items-center">
-            <Ionicons name="image-outline" size={64} color="#999" className="mb-4" />
-            <Text className="text-gray-500 text-lg font-medium">Tap to select an image</Text>
-          </View>
-        )}
-      </TouchableOpacity>
+      {/* Media Selection Section */}
+      <View className="flex-row justify-around p-4 border-b border-gray-200">
+        <TouchableOpacity 
+          onPress={() => setPostType('post')}
+          className={`p-2 ${postType === 'post' ? 'border-b-2 border-blue-500' : ''}`}
+        >
+          <Text className={`text-lg ${postType === 'post' ? 'font-bold text-blue-500' : 'text-gray-500'}`}>Post</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          onPress={() => setPostType('story')}
+          className={`p-2 ${postType === 'story' ? 'border-b-2 border-blue-500' : ''}`}
+        >
+          <Text className={`text-lg ${postType === 'story' ? 'font-bold text-blue-500' : 'text-gray-500'}`}>Story</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          onPress={() => setPostType('reel')}
+          className={`p-2 ${postType === 'reel' ? 'border-b-2 border-blue-500' : ''}`}
+        >
+          <Text className={`text-lg ${postType === 'reel' ? 'font-bold text-blue-500' : 'text-gray-500'}`}>Reel</Text>
+        </TouchableOpacity>
+      </View>
 
-      <View className="p-4 bg-white">
+      {/* Media Preview Section */}
+      <View className="flex-1 bg-white">
+        {loading ? (
+          <ActivityIndicator size="large" color="#000" className="flex-1 justify-center" />
+        ) : selectedMedia.length > 0 ? (
+          <View className="flex-1">
+            <Image
+              source={{ uri: selectedMedia[currentIndex].uri }}
+              className="w-full h-full"
+              resizeMode="contain"
+            />
+            
+            {/* Media Indicator Dots */}
+            <View className="absolute bottom-4 w-full flex-row justify-center space-x-2">
+              {selectedMedia.map((_, index) => (
+                <View
+                  key={index}
+                  className={`w-2 h-2 rounded-full ${index === currentIndex ? 'bg-black' : 'bg-gray-300'}`}
+                />
+              ))}
+            </View>
+
+            {/* Navigation Arrows */}
+            {selectedMedia.length > 1 && (
+              <>
+                <TouchableOpacity
+                  onPress={() => setCurrentIndex(prev => (prev > 0 ? prev - 1 : prev))}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 rounded-full border border-gray-200"
+                >
+                  <Ionicons name="chevron-back" size={24} color="black" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setCurrentIndex(prev => (prev < selectedMedia.length - 1 ? prev + 1 : prev))}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 rounded-full border border-gray-200"
+                >
+                  <Ionicons name="chevron-forward" size={24} color="black" />
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        ) : (
+          <TouchableOpacity 
+            onPress={() => pickMedia(postType === 'reel' ? 'video' : 'image')} 
+            className="flex-1 justify-center items-center"
+          >
+            <Ionicons name={postType === 'reel' ? "videocam-outline" : "image-outline"} size={64} color="#666" className="mb-4" />
+            <Text className="text-gray-600 text-lg font-medium">
+              Tap to select {postType === 'reel' ? 'a video' : 'an image'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Content Creation Section */}
+      <View className="p-4 bg-white border-t border-gray-200">
         <TextInput
           value={caption}
           onChangeText={setCaption}
-          placeholder="Write a caption..."
+          placeholder={
+            postType === 'reel' ? "Add a caption for your reel..." :
+            postType === 'story' ? "Add a caption for your story..." :
+            "Write a caption..."
+          }
           placeholderTextColor="#666"
           multiline
           className="p-3 bg-gray-50 text-black rounded-xl"
@@ -151,15 +188,19 @@ export default function CreatePost() {
         />
 
         <TouchableOpacity 
-          onPress={createPost} 
-          disabled={loading || !image}
-          className={`mt-4 p-3 rounded-xl items-center ${loading || !image ? 'bg-blue-300' : 'bg-blue-500'}`}
+          onPress={createContent} 
+          disabled={loading || selectedMedia.length === 0}
+          className={`mt-4 p-3 rounded-xl items-center ${loading || selectedMedia.length === 0 ? 'bg-blue-300' : 'bg-blue-500'}`}
         >
           {loading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <Text className="text-white font-semibold text-lg">
-              {image ? 'Share' : 'Select an image to share'}
+              {selectedMedia.length > 0 ? 
+                (postType === 'story' ? 'Share Story' : 
+                 postType === 'reel' ? 'Share Reel' : 
+                 `Share ${selectedMedia.length} ${selectedMedia.length > 1 ? 'Posts' : 'Post'}`) : 
+                `Select media to ${postType}`}
             </Text>
           )}
         </TouchableOpacity>

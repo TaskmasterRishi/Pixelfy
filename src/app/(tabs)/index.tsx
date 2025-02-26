@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -39,17 +39,23 @@ export default function FeedScreen() {
   });
 
   const fetchPosts = async (reset = false) => {
-    if (!hasMore && !reset) return;
-
     setLoading(true);
-    const query = supabase
+    let query = supabase
       .from("posts")
-      .select("*, user:users (username, avatar_url, verified)")
-      .order("created_at", { ascending: false })
-      .limit(PAGE_SIZE);
+      .select("*, user:users (username, avatar_url, verified, is_private)")
+      .order("created_at", { ascending: false });
 
-    if (!reset && lastPostId) {
-      query.lt("id", lastPostId);
+    // Exclude current user's posts
+    if (user) {
+      query = query.neq('user_id', user.id);
+    }
+
+    // If user has private account, only fetch public posts
+    if (user?.is_private) {
+      query = query.eq('users.is_private', false);
+    } else {
+      // For public accounts, only show posts from public users
+      query = query.eq('users.is_private', false);
     }
 
     const { data, error } = await query;
@@ -61,26 +67,36 @@ export default function FeedScreen() {
       return;
     }
 
-    if (data.length > 0) {
-      setLastPostId(data[data.length - 1].id);
-    }
-
-    setPosts((prev) => {
-      const newPosts = reset ? data : [...prev, ...data];
-      return Array.from(new Map(newPosts.map((post) => [post.id, post])).values());
-    });
-
-    setHasMore(data.length === PAGE_SIZE);
+    setPosts(data);
     setLoading(false);
   };
 
-  useFocusEffect(() => {
-    if (!user || !username) {
-      router.replace("/(screens)/user_info");
-      return;
-    }
-    fetchPosts(true);
-  });
+  useFocusEffect(
+    useCallback(() => {
+      if (!user || !username) {
+        router.replace("/(screens)/user_info");
+        return;
+      }
+
+      let isActive = true;
+
+      const fetchData = async () => {
+        try {
+          await fetchPosts(true);
+        } catch (error) {
+          console.error("Fetch error:", error);
+        }
+      };
+
+      if (isActive) {
+        fetchData();
+      }
+
+      return () => {
+        isActive = false;
+      };
+    }, [user, username])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);

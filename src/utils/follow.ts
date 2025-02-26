@@ -28,7 +28,9 @@ export const sendFollowRequest = async (targetUserId: string) => {
       requester_id: user.id,
       target_id: targetUserId,
       status: 'Pending'
-    }]);
+    }])
+    .select()
+    .single();
 
   if (error) {
     throw error;

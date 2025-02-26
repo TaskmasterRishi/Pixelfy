@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, TextInput, FlatList, Pressable, Image, Text, Dimensions, ScrollView, ActivityIndicator } from 'react-native';
+import { View, TextInput, FlatList, Pressable, Image, Text, Dimensions, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { useAuth } from '../../providers/AuthProvider';
 import { supabase } from '../../lib/supabase';
 import { FontAwesome } from '@expo/vector-icons';
@@ -78,7 +78,14 @@ export default function SearchPage() {
         )}
         <Pressable 
           className="mt-3 bg-blue-500 px-3 py-1 rounded-full"
-          onPress={() => sendFollowRequest(user.id)}
+          onPress={async () => {
+            try {
+              await sendFollowRequest(user.id);
+              Alert.alert('Success', 'Follow request sent');
+            } catch (error) {
+              Alert.alert('Error', error.message);
+            }
+          }}
         >
           <Text className="text-white text-xs">Follow</Text>
         </Pressable>
