@@ -178,6 +178,15 @@ export default function TabLayout() {
                     }}
                 />
 
+                <Tabs.Screen
+                    name="chat"
+                    options={{
+                        tabBarIcon: ({ color, focused }) => (
+                            <TabIcon name="comments-o" color={color} focused={focused} />
+                        ),
+                        title: "Chat"
+                    }}
+                />
 
             </Tabs>
         </SafeAreaView>
