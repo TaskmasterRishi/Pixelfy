@@ -149,7 +149,7 @@ export default function FeedScreen() {
       <Animated.View
         style={{
           transform: [{ translateY: headerTranslateY }],
-          height: 60,
+          height: 50,
           position: "absolute",
           top: 0,
           left: 0,
@@ -183,10 +183,18 @@ export default function FeedScreen() {
           data={posts}
           keyExtractor={(item, index) => (item.id ? item.id.toString() : `post-${index}`)}
           renderItem={({ item }) => <PostListItem post={item} />}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          onScroll={handleScroll} // Detect scroll up/down movement
-          scrollEventThrottle={16} // Ensures smooth scroll event handling
-          contentContainerStyle={{ paddingTop: 60 }}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          contentContainerStyle={{ paddingTop: 40 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#000000']}
+              tintColor="#000000"
+              progressViewOffset={30}
+            />
+          }
         />
       )}
     </View>

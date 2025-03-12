@@ -4,7 +4,6 @@ import { useAuth } from '../../providers/AuthProvider';
 import { supabase } from '../../lib/supabase';
 import { FontAwesome } from '@expo/vector-icons';
 import MasonryList from '@react-native-seoul/masonry-list';
-import { sendFollowRequest } from '../../utils/follow';
 
 export default function SearchPage() {
   const { user } = useAuth();
