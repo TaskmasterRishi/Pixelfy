@@ -46,7 +46,7 @@ export default function StoryViewer() {
         .from("stories")
         .select("id, media_url, created_at, caption, user_id")
         .eq("user_id", selectedStory.user_id)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: true }); // Changed to ascending order
 
       if (userError || !userStories) {
         console.error("Error fetching user's stories:", userError);
@@ -55,7 +55,7 @@ export default function StoryViewer() {
       }
 
       setStories(userStories);
-      // Always start from the first (oldest) story
+      // Always start from the first story (oldest)
       setCurrentIndex(0);
       startProgressBar();
       setLoading(false);
@@ -67,20 +67,36 @@ export default function StoryViewer() {
   }, [storyId]);
 
   useEffect(() => {
-    startProgressBar();
-  }, [currentIndex]);
+    if (stories.length > 0) {
+      startProgressBar();
+    }
+  }, [currentIndex, stories]);
 
   const isVideo = (url: string) => url.match(/\.(mp4|mov|avi|mkv|webm)$/i);
 
   const startProgressBar = () => {
+    // Reset the progress bar
     progress.setValue(0);
+    
+    // Stop any existing animation
+    progress.stopAnimation();
+
+    // Start new animation
     Animated.timing(progress, {
       toValue: 100,
       duration: 5000, // 5 seconds per story
       useNativeDriver: false,
     }).start(({ finished }) => {
       if (finished) {
-        goNextStory();
+        // Ensure we have the latest state
+        setCurrentIndex(prevIndex => {
+          if (prevIndex < stories.length - 1) {
+            return prevIndex + 1;
+          } else {
+            router.back();
+            return prevIndex; // Return current index while navigating back
+          }
+        });
       }
     });
   };
@@ -97,11 +113,14 @@ export default function StoryViewer() {
   };
 
   const goNextStory = () => {
-    if (currentIndex < stories.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      router.back(); // Close only after all stories are shown
-    }
+    setCurrentIndex(prevIndex => {
+      if (prevIndex < stories.length - 1) {
+        return prevIndex + 1;
+      } else {
+        router.back();
+        return prevIndex; // Return current index while navigating back
+      }
+    });
   };
 
   const goPrevStory = () => {
@@ -149,7 +168,14 @@ export default function StoryViewer() {
                 shouldPlay
                 onPlaybackStatusUpdate={(status) => {
                   if (status.didJustFinish) {
-                    goNextStory();
+                    setCurrentIndex(prevIndex => {
+                      if (prevIndex < stories.length - 1) {
+                        return prevIndex + 1;
+                      } else {
+                        router.back();
+                        return prevIndex;
+                      }
+                    });
                   }
                 }}
               />
@@ -205,3 +231,4 @@ export default function StoryViewer() {
     </GestureHandlerRootView>
   );
 }
+
