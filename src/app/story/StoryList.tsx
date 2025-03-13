@@ -24,14 +24,22 @@ export default function StoryList() {
       setLoading(true);
       const { data, error } = await supabase
         .from("stories")
-        .select("id, media_url, created_at, user:users(username, avatar_url)")
+        .select("id, media_url, created_at, user_id, user:users(username, avatar_url)")
         .order("created_at", { ascending: false })
         .limit(10);
 
       if (error) {
         console.error("Error fetching stories:", error);
       } else {
-        setStories(data);
+        // Filter to show only the latest story per user
+        const uniqueUserStories = data.reduce((acc, story) => {
+          const existing = acc.find(s => s.user_id === story.user_id);
+          if (!existing) {
+            acc.push(story);
+          }
+          return acc;
+        }, []);
+        setStories(uniqueUserStories);
       }
       setLoading(false);
     };
