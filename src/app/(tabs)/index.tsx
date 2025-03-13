@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { supabase } from "~/src/lib/supabase";
 import { useFocusEffect, useRouter } from "expo-router";
+import StoryList from "~/src/app/story/StoryList";
 import PostListItem from "~/src/Components/PostListItem";
 import { useFonts } from "expo-font";
 import Ionicons from "react-native-vector-icons/Ionicons";
@@ -24,15 +25,12 @@ export default function FeedScreen() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [lastPostId, setLastPostId] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(true);
   const router = useRouter();
   const { user, username } = useAuth();
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const lastScrollY = useRef(0);
   const headerTranslateY = useRef(new Animated.Value(0)).current;
-  const notificationScale = useRef(new Animated.Value(1)).current;
 
   const [fontsLoaded] = useFonts({
     "OnryDisplay-Bold": require("~/assets/fonts/nicolassfonts-onrydisplay-extrabold.otf"),
@@ -45,17 +43,14 @@ export default function FeedScreen() {
       .select("*, user:users (username, avatar_url, verified, is_private)")
       .order("created_at", { ascending: false });
 
-    // Exclude current user's posts
     if (user) {
-      query = query.neq('user_id', user.id);
+      query = query.neq("user_id", user.id);
     }
 
-    // If user has private account, only fetch public posts
     if (user?.is_private) {
-      query = query.eq('users.is_private', false);
+      query = query.eq("users.is_private", false);
     } else {
-      // For public accounts, only show posts from public users
-      query = query.eq('users.is_private', false);
+      query = query.eq("users.is_private", false);
     }
 
     const { data, error } = await query;
@@ -111,33 +106,29 @@ export default function FeedScreen() {
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const currentScrollY = event.nativeEvent.contentOffset.y;
     const scrollDifference = currentScrollY - lastScrollY.current;
-  
+
     if (currentScrollY <= 0) {
-      // Ensure the header stays visible when at the very top
       Animated.timing(headerTranslateY, {
         toValue: 0,
         duration: 200,
         useNativeDriver: true,
       }).start();
     } else if (scrollDifference > 5) {
-      // Scrolling Down - Hide Header
       Animated.timing(headerTranslateY, {
         toValue: -60,
         duration: 200,
         useNativeDriver: true,
       }).start();
     } else if (scrollDifference < -5) {
-      // Scrolling Up - Show Header
       Animated.timing(headerTranslateY, {
         toValue: 0,
         duration: 200,
         useNativeDriver: true,
       }).start();
     }
-  
+
     lastScrollY.current = currentScrollY;
   };
-  
 
   if (!fontsLoaded) {
     return <ActivityIndicator size="large" color="#000" />;
@@ -174,29 +165,34 @@ export default function FeedScreen() {
       </Animated.View>
 
       {/* Content */}
-      {loading && posts.length === 0 ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#000" />
-        </View>
-      ) : (
-        <FlatList
-          data={posts}
-          keyExtractor={(item, index) => (item.id ? item.id.toString() : `post-${index}`)}
-          renderItem={({ item }) => <PostListItem post={item} />}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-          contentContainerStyle={{ paddingTop: 40 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#000000']}
-              tintColor="#000000"
-              progressViewOffset={30}
-            />
-          }
-        />
-      )}
+      <View className="flex-1 bg-gray-100 pt-16 pb-5">
+        {/* Story List */}
+        <StoryList />
+
+        {loading && posts.length === 0 ? (
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator size="large" color="#000" />
+          </View>
+        ) : (
+          <FlatList
+            data={posts}
+            keyExtractor={(item, index) => (item.id ? item.id.toString() : `post-${index}`)}
+            renderItem={({ item }) => <PostListItem post={item} />}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            contentContainerStyle={{ paddingTop: 10 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={["#000000"]}
+                tintColor="#000000"
+                progressViewOffset={30}
+              />
+            }
+          />
+        )}
+      </View>
     </View>
   );
 }
