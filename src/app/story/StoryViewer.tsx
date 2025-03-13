@@ -166,6 +166,8 @@ export default function StoryViewer() {
                 useNativeControls={false}
                 resizeMode="cover"
                 shouldPlay
+                isMuted={false}
+                volume={1.0}
                 onPlaybackStatusUpdate={(status) => {
                   if (status.didJustFinish) {
                     setCurrentIndex(prevIndex => {
@@ -181,48 +183,59 @@ export default function StoryViewer() {
               />
             </TouchableOpacity>
           ) : (
-            <Image source={{ uri: stories[currentIndex].media_url }} className="w-full h-full" resizeMode="cover" />
+            <Image 
+              source={{ uri: stories[currentIndex].media_url }} 
+              className="w-full h-full" 
+              resizeMode="cover"
+              blurRadius={2}
+            />
           )}
 
-          {/* UI Overlay */}
-          <View className="absolute top-0 left-0 w-full h-full bg-black/30" />
+          {/* Gradient Overlay */}
+          <View className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-black/50 to-black/10" />
 
           {/* Header with Progress Bar & Close Button */}
           <View className="absolute top-12 left-5 flex-row justify-between w-[90%] items-center">
             <View className="flex-1 flex-row space-x-1">
               {stories.map((_, index) => (
-                <View key={index} className="h-1 flex-1 rounded-full bg-white/30 overflow-hidden">
+                <View key={index} className="h-1.5 flex-1 rounded-full bg-white/20 overflow-hidden">
                   <Animated.View
                     style={{
                       width: index === currentIndex ? progress.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] }) : "100%",
+                      backgroundColor: index === currentIndex ? "#ffffff" : "#ffffff30",
                     }}
-                    className={`h-full ${index === currentIndex ? "bg-white" : "bg-white/30"}`}
+                    className="h-full rounded-full"
                   />
                 </View>
               ))}
             </View>
-            <TouchableOpacity onPress={() => router.back()} className="ml-4">
-              <Ionicons name="close" size={30} color="white" />
+            <TouchableOpacity 
+              onPress={() => router.back()} 
+              className="ml-4 p-2 bg-black/30 rounded-full"
+            >
+              <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
           </View>
 
           {/* Bottom Controls */}
           <View className="absolute bottom-10 w-[90%] flex-row items-end justify-between">
             {/* Caption */}
-            <View className="flex-1">
-              <Text className="text-white text-lg font-semibold shadow-md">{stories[currentIndex].caption}</Text>
+            <View className="flex-1 bg-black/30 rounded-2xl p-4">
+              <Text className="text-white text-lg font-medium leading-6">
+                {stories[currentIndex].caption}
+              </Text>
             </View>
 
             {/* Action Icons */}
-            <View className="flex-row space-x-5">
-              <TouchableOpacity className="bg-white/20 p-3 rounded-full">
-                <Ionicons name="heart-outline" size={28} color="white" />
+            <View className="flex-row space-x-4 ml-4">
+              <TouchableOpacity className="bg-black/30 p-3 rounded-full shadow-lg">
+                <Ionicons name="heart" size={24} color="white" />
               </TouchableOpacity>
-              <TouchableOpacity className="bg-white/20 p-3 rounded-full">
-                <Ionicons name="chatbubble-outline" size={28} color="white" />
+              <TouchableOpacity className="bg-black/30 p-3 rounded-full shadow-lg">
+                <Ionicons name="chatbubble" size={24} color="white" />
               </TouchableOpacity>
-              <TouchableOpacity className="bg-white/20 p-3 rounded-full">
-                <Ionicons name="paper-plane-outline" size={28} color="white" />
+              <TouchableOpacity className="bg-black/30 p-3 rounded-full shadow-lg">
+                <Ionicons name="paper-plane" size={24} color="white" />
               </TouchableOpacity>
             </View>
           </View>
