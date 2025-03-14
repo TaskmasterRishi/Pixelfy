@@ -1,247 +1,288 @@
-import React, { useEffect, useState, useRef } from "react";
-import { View, Image, TouchableOpacity, ActivityIndicator, Text, Animated, Dimensions } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  Dimensions,
+  TouchableWithoutFeedback,
+  Image,
+  Animated,
+  StatusBar,
+  TouchableOpacity,
+} from "react-native";
 import { Video } from "expo-av";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { supabase } from "~/src/lib/supabase";
-import Ionicons from "react-native-vector-icons/Ionicons";
-import { TapGestureHandler, State, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+
+const { width, height } = Dimensions.get("window");
 
 interface Story {
   id: string;
   media_url: string;
-  created_at: string;
-  caption: string;
+  type: "image" | "video";
+  caption?: string;
+  user: {
+    username: string;
+    avatar_url: string;
+  };
   user_id: string;
 }
 
-export default function StoryViewer() {
-  const { storyId } = useLocalSearchParams();
-  const [stories, setStories] = useState<Story[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
-  const videoRef = useRef<Video>(null);
-  const [isPlaying, setIsPlaying] = useState(true);
+interface StoryViewerProps {
+  stories: Story[];
+  onClose: () => void;
+  onNextUser: () => void;
+  onPreviousUser: () => void;
+}
+
+const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryViewerProps) => {
+  const [current, setCurrent] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [videoDuration, setVideoDuration] = useState(5000);
   const progress = useRef(new Animated.Value(0)).current;
+  const videoRef = useRef<Video>(null);
 
+  // Ensure current is within bounds
   useEffect(() => {
-    const fetchStories = async () => {
-      setLoading(true);
-
-      // Fetch the selected story first to find the user_id
-      const { data: selectedStory, error: selectedError } = await supabase
-        .from("stories")
-        .select("id, media_url, created_at, caption, user_id")
-        .eq("id", storyId)
-        .single();
-
-      if (selectedError || !selectedStory) {
-        console.error("Error fetching selected story:", selectedError);
-        setLoading(false);
-        return;
-      }
-
-      // Fetch all stories from the same user, ordered by oldest first
-      const { data: userStories, error: userError } = await supabase
-        .from("stories")
-        .select("id, media_url, created_at, caption, user_id")
-        .eq("user_id", selectedStory.user_id)
-        .order("created_at", { ascending: true }); // Changed to ascending order
-
-      if (userError || !userStories) {
-        console.error("Error fetching user's stories:", userError);
-        setLoading(false);
-        return;
-      }
-
-      setStories(userStories);
-      // Always start from the first story (oldest)
-      setCurrentIndex(0);
-      startProgressBar();
-      setLoading(false);
-    };
-
-    if (storyId) {
-      fetchStories();
+    if (stories.length > 0 && (current < 0 || current >= stories.length)) {
+      setCurrent(0); // Reset to the first story if out of bounds
     }
-  }, [storyId]);
+  }, [current, stories]);
 
   useEffect(() => {
     if (stories.length > 0) {
-      startProgressBar();
+      startProgress();
     }
-  }, [currentIndex, stories]);
+  }, [current, stories]);
 
-  const isVideo = (url: string) => url.match(/\.(mp4|mov|avi|mkv|webm)$/i);
+  const startProgress = () => {
+    if (!stories[current]) return; // Guard against undefined story
 
-  const startProgressBar = () => {
-    // Reset the progress bar
-    progress.setValue(0);
-    
-    // Stop any existing animation
     progress.stopAnimation();
+    progress.setValue(0);
 
-    // Start new animation
     Animated.timing(progress, {
-      toValue: 100,
-      duration: 5000, // 5 seconds per story
+      toValue: 1,
+      duration: stories[current].type === "video" ? videoDuration : 5000,
       useNativeDriver: false,
     }).start(({ finished }) => {
       if (finished) {
-        // Ensure we have the latest state
-        setCurrentIndex(prevIndex => {
-          if (prevIndex < stories.length - 1) {
-            return prevIndex + 1;
-          } else {
-            router.back();
-            return prevIndex; // Return current index while navigating back
-          }
-        });
+        if (current < stories.length - 1) {
+          setCurrent(current + 1);
+        } else {
+          onNextUser();
+        }
       }
     });
   };
 
-  const handleVideoPress = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pauseAsync();
-      } else {
-        videoRef.current.playAsync();
-      }
-      setIsPlaying(!isPlaying);
-    }
-  };
-
-  const goNextStory = () => {
-    setCurrentIndex(prevIndex => {
-      if (prevIndex < stories.length - 1) {
-        return prevIndex + 1;
-      } else {
-        router.back();
-        return prevIndex; // Return current index while navigating back
-      }
-    });
-  };
-
-  const goPrevStory = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
+  const nextStory = () => {
+    if (current < stories.length - 1) {
+      setCurrent(current + 1);
     } else {
-      router.back(); // Close if there are no previous stories
+      onNextUser();
     }
   };
 
-  const handleTap = ({ nativeEvent }) => {
-    const screenWidth = Dimensions.get('window').width;
-    const tapX = nativeEvent.x;
-    
-    if (tapX < screenWidth / 3) {
-      goPrevStory();
-    } else if (tapX > screenWidth / 3) {
-      goNextStory();
+  const previousStory = () => {
+    if (current > 0) {
+      setCurrent(current - 1);
+    } else {
+      onPreviousUser();
     }
   };
 
-  if (loading) {
-    return <ActivityIndicator size="large" color="#fff" className="flex-1" />;
+  if (stories.length === 0) {
+    return (
+      <View className="flex-1 bg-black justify-center items-center">
+        <ActivityIndicator size="large" color="#fff" />
+      </View>
+    );
+  }
+
+  const currentStory = stories[current];
+  if (!currentStory) {
+    return null; // Return nothing if current story is undefined
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <TapGestureHandler
-        onHandlerStateChange={({ nativeEvent }) => {
-          if (nativeEvent.state === State.END) {
-            handleTap({ nativeEvent });
-          }
-        }}
-      >
-        <View className="flex-1 bg-black justify-center items-center relative">
-          {/* Media */}
-          {stories[currentIndex] && isVideo(stories[currentIndex].media_url) ? (
-            <TouchableOpacity onPress={handleVideoPress} activeOpacity={1} className="w-full h-full">
-              <Video
-                ref={videoRef}
-                source={{ uri: stories[currentIndex].media_url }}
-                className="w-full h-full"
-                useNativeControls={false}
-                resizeMode="cover"
-                shouldPlay
-                isMuted={false}
-                volume={1.0}
-                onPlaybackStatusUpdate={(status) => {
-                  if (status.didJustFinish) {
-                    setCurrentIndex(prevIndex => {
-                      if (prevIndex < stories.length - 1) {
-                        return prevIndex + 1;
-                      } else {
-                        router.back();
-                        return prevIndex;
-                      }
-                    });
-                  }
-                }}
-              />
-            </TouchableOpacity>
-          ) : (
-            <Image 
-              source={{ uri: stories[currentIndex].media_url }} 
-              className="w-full h-full" 
-              resizeMode="cover"
-              blurRadius={2}
-            />
-          )}
+    <View className="flex-1 bg-black">
+      <StatusBar backgroundColor="black" barStyle="light-content" />
 
-          {/* Gradient Overlay */}
-          <View className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-black/50 to-black/10" />
+      {/* Story Media (Video/Image) */}
+      <View className="absolute top-0 bottom-0 left-0 right-0">
+        {currentStory.type === "video" ? (
+          <Video
+            ref={videoRef}
+            source={{ uri: currentStory.media_url }}
+            resizeMode="cover"
+            shouldPlay
+            useNativeControls={false}
+            className="w-full h-full"
+            onPlaybackStatusUpdate={(status) => {
+              if (status.isLoaded) {
+                setLoading(false);
+                setVideoDuration(status.durationMillis || 5000);
+              }
+            }}
+          />
+        ) : (
+          <Image
+            source={{ uri: currentStory.media_url }}
+            className="w-full h-full"
+            resizeMode="cover"
+            onLoadEnd={() => setLoading(false)}
+          />
+        )}
+      </View>
 
-          {/* Header with Progress Bar & Close Button */}
-          <View className="absolute top-12 left-5 flex-row justify-between w-[90%] items-center">
-            <View className="flex-1 flex-row space-x-1">
-              {stories.map((_, index) => (
-                <View key={index} className="h-1.5 flex-1 rounded-full bg-white/20 overflow-hidden">
-                  <Animated.View
-                    style={{
-                      width: index === currentIndex ? progress.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] }) : "100%",
-                      backgroundColor: index === currentIndex ? "#ffffff" : "#ffffff30",
-                    }}
-                    className="h-full rounded-full"
-                  />
-                </View>
-              ))}
-            </View>
-            <TouchableOpacity 
-              onPress={() => router.back()} 
-              className="ml-4 p-2 bg-black/30 rounded-full"
-            >
-              <Ionicons name="close" size={24} color="white" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Bottom Controls */}
-          <View className="absolute bottom-10 w-[90%] flex-row items-end justify-between">
-            {/* Caption */}
-            <View className="flex-1 bg-black/30 rounded-2xl p-4">
-              <Text className="text-white text-lg font-medium leading-6">
-                {stories[currentIndex].caption}
-              </Text>
-            </View>
-
-            {/* Action Icons */}
-            <View className="flex-row space-x-4 ml-4">
-              <TouchableOpacity className="bg-black/30 p-3 rounded-full shadow-lg">
-                <Ionicons name="heart" size={24} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity className="bg-black/30 p-3 rounded-full shadow-lg">
-                <Ionicons name="chatbubble" size={24} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity className="bg-black/30 p-3 rounded-full shadow-lg">
-                <Ionicons name="paper-plane" size={24} color="white" />
-              </TouchableOpacity>
-            </View>
-          </View>
+      {/* Loading Indicator */}
+      {loading && (
+        <View className="absolute top-0 bottom-0 left-0 right-0 justify-center items-center bg-black/30">
+          <ActivityIndicator size="large" color="white" />
         </View>
-      </TapGestureHandler>
-    </GestureHandlerRootView>
+      )}
+
+      {/* Header: User Info & Close Button */}
+      <View className="absolute top-20 left-5 right-5 flex-row items-center justify-between">
+        <View className="flex-row items-center space-x-3">
+          <Image
+            source={{ uri: currentStory.user.avatar_url }}
+            className="w-10 h-10 rounded-full border-2 border-white"
+          />
+          <Text className="text-white text-lg pl-5 font-semibold">
+            {currentStory.user.username}
+          </Text>
+        </View>
+        <TouchableOpacity onPress={onClose} className="p-2">
+          <Ionicons name="close" size={28} color="white" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Progress Bars */}
+      <View className="absolute top-32 left-5 right-5 flex-row space-x-1">
+        {stories.map((_, index) => (
+          <View
+            key={index}
+            className="flex-1 h-1.5 bg-gray-500/30 rounded-full overflow-hidden"
+          >
+            <Animated.View
+              className="h-1.5 bg-white rounded-full"
+              style={{
+                width: current === index
+                  ? progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ["0%", "100%"],
+                    })
+                  : current > index
+                  ? "100%"
+                  : "0%",
+              }}
+            />
+          </View>
+        ))}
+      </View>
+
+      {/* Caption & Action Buttons */}
+      <View className="absolute bottom-24 left-4 right-4">
+        {currentStory.caption && (
+          <Text className="text-white pb-20 bg-black text-lg font-medium mb-4">
+            {currentStory.caption}
+          </Text>
+        )}
+        <View className="absolute bottom-4 right-4 flex-col space-y-4">
+          <TouchableOpacity className="bg-black/50 p-3 rounded-full">
+            <Ionicons name="heart" size={24} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity className="bg-black/50 p-3 rounded-full">
+            <Ionicons name="chatbubble" size={24} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity className="bg-black/50 p-3 rounded-full">
+            <Ionicons name="paper-plane" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Navigation Controls */}
+      <View className="absolute top-0 left-0 right-0 bottom-0 flex-row">
+        <TouchableWithoutFeedback onPress={previousStory}>
+          <View className="flex-1" />
+        </TouchableWithoutFeedback>
+        <TouchableWithoutFeedback onPress={nextStory}>
+          <View className="flex-1" />
+        </TouchableWithoutFeedback>
+      </View>
+    </View>
+  );
+};
+
+export default function StoryViewerWrapper() {
+  const { storyData, initialUserId } = useLocalSearchParams();
+  const router = useRouter();
+  const [groupedStories, setGroupedStories] = useState<{ [key: string]: Story[] }>({});
+  const [currentUserId, setCurrentUserId] = useState<string | null>(initialUserId as string | null);
+  const [currentUserStories, setCurrentUserStories] = useState<Story[]>([]);
+
+  useEffect(() => {
+    const fetchAndTransformStories = async () => {
+      try {
+        if (!storyData) {
+          console.error("Error: storyData is undefined or null");
+          return;
+        }
+
+        const parsedStories = JSON.parse(storyData as string);
+        setGroupedStories(parsedStories);
+
+        if (initialUserId && parsedStories[initialUserId]) {
+          setCurrentUserStories(parsedStories[initialUserId]);
+        }
+      } catch (error) {
+        console.error("Error parsing storyData:", error);
+      }
+    };
+
+    fetchAndTransformStories();
+  }, [storyData, initialUserId]);
+
+  const handleNextUser = () => {
+    const userIds = Object.keys(groupedStories);
+    const currentIndex = userIds.indexOf(currentUserId || "");
+
+    if (currentIndex < userIds.length - 1) {
+      const nextUserId = userIds[currentIndex + 1];
+      setCurrentUserId(nextUserId);
+      setCurrentUserStories(groupedStories[nextUserId]);
+    } else {
+      router.back(); // Auto-close when all users' stories are viewed
+    }
+  };
+
+  const handlePreviousUser = () => {
+    const userIds = Object.keys(groupedStories);
+    const currentIndex = userIds.indexOf(currentUserId || "");
+
+    if (currentIndex > 0) {
+      const previousUserId = userIds[currentIndex - 1];
+      setCurrentUserId(previousUserId);
+      setCurrentUserStories(groupedStories[previousUserId]);
+    }
+  };
+
+  if (!currentUserId || currentUserStories.length === 0) {
+    return (
+      <View className="flex-1 bg-black justify-center items-center">
+        <ActivityIndicator size="large" color="#fff" />
+      </View>
+    );
+  }
+
+  return (
+    <StoryViewer
+      stories={currentUserStories}
+      onClose={() => router.back()}
+      onNextUser={handleNextUser}
+      onPreviousUser={handlePreviousUser}
+    />
   );
 }
-
