@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -27,6 +27,7 @@ export default function FeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
   const { user, username } = useAuth();
+  const [hasUnseenNotifications, setHasUnseenNotifications] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const lastScrollY = useRef(0);
@@ -100,7 +101,7 @@ export default function FeedScreen() {
   };
 
   const handleNotificationPress = () => {
-    router.push("/(screens)/notifications");
+    router.push("/notification");
   };
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -129,6 +130,46 @@ export default function FeedScreen() {
 
     lastScrollY.current = currentScrollY;
   };
+
+  const checkUnseenNotifications = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('seen', false)
+        .limit(1);
+
+      if (!error) {
+        setHasUnseenNotifications(data.length > 0);
+      }
+    } catch (error) {
+      console.error('Error checking unseen notifications:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      checkUnseenNotifications();
+      
+      // Set up realtime subscription
+      const subscription = supabase
+        .channel('notifications')
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`
+        }, () => {
+          checkUnseenNotifications();
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(subscription);
+      };
+    }
+  }, [user]);
 
   if (!fontsLoaded) {
     return <ActivityIndicator size="large" color="#000" />;
@@ -160,7 +201,12 @@ export default function FeedScreen() {
       >
         <Text style={{ fontSize: 24, fontFamily: "OnryDisplay-Bold" }}>Pixelfy</Text>
         <TouchableOpacity onPress={handleNotificationPress} activeOpacity={1}>
-          <Ionicons name="notifications" size={28} color="black" />
+          <View className="relative">
+            <Ionicons name="notifications" size={28} color="black" />
+            {hasUnseenNotifications && (
+              <View className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+            )}
+          </View>
         </TouchableOpacity>
       </Animated.View>
 

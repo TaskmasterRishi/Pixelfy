@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { View, TextInput, FlatList, Pressable, Image, Text, Dimensions, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, TextInput, FlatList, Pressable, Image, Text, Dimensions, ScrollView, ActivityIndicator, Alert, RefreshControl } from 'react-native';
 import { useAuth } from '../../providers/AuthProvider';
 import { supabase } from '../../lib/supabase';
 import { FontAwesome } from '@expo/vector-icons';
 import MasonryList from '@react-native-seoul/masonry-list';
+import FollowRequest from '../../Components/FollowRequest';
 
 export default function SearchPage() {
   const { user } = useAuth();
@@ -11,6 +12,7 @@ export default function SearchPage() {
   const [searchResults, setSearchResults] = useState([]);
   const [publicUsers, setPublicUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchPublicUsers = async () => {
     setIsLoading(true);
@@ -51,6 +53,18 @@ export default function SearchPage() {
     fetchPublicUsers();
   }, []);
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchPublicUsers();
+      if (searchQuery.length > 0) {
+        await handleSearch(searchQuery);
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const renderUserCard = (user) => (
     <View key={user.id} className="w-[48%] mb-4 bg-white rounded-lg shadow-sm p-3">
       <View className="items-center">
@@ -75,19 +89,13 @@ export default function SearchPage() {
             {user.bio}
           </Text>
         )}
-        <Pressable 
-          className="mt-3 bg-blue-500 px-3 py-1 rounded-full"
-          onPress={async () => {
-            try {
-              await sendFollowRequest(user.id);
-              Alert.alert('Success', 'Follow request sent');
-            } catch (error) {
-              Alert.alert('Error', error.message);
-            }
+        <FollowRequest 
+          targetId={user.id}
+          requesterId={user.id}
+          onRequestSent={() => {
+            // Optional: Add any additional logic you want to run after request is sent
           }}
-        >
-          <Text className="text-white text-xs">Follow</Text>
-        </Pressable>
+        />
       </View>
     </View>
   );
@@ -119,7 +127,18 @@ export default function SearchPage() {
           <ActivityIndicator size="large" color="#000" />
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} className="p-2">
+        <ScrollView 
+          showsVerticalScrollIndicator={false} 
+          className="p-2"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#000000']}
+              tintColor="#000000"
+            />
+          }
+        >
           {searchResults.length > 0 ? (
             <View className="flex-row flex-wrap justify-between px-2">
               {searchResults.map(renderUserCard)}
