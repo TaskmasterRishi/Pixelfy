@@ -39,8 +39,14 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
   const [current, setCurrent] = useState(0);
   const [loading, setLoading] = useState(false);
   const [videoDuration, setVideoDuration] = useState(5000);
+  const [isPaused, setIsPaused] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState(0);
   const progress = useRef(new Animated.Value(0)).current;
   const videoRef = useRef<Video>(null);
+  const animationStartTime = useRef(0);
+  const pauseTime = useRef(0);
+  const [isHolding, setIsHolding] = useState(false);
+  const holdTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Ensure current is within bounds
   useEffect(() => {
@@ -56,17 +62,24 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
   }, [current, stories]);
 
   const startProgress = () => {
-    if (!stories[current]) return; // Guard against undefined story
+    if (!stories[current] || isPaused) return;
+
+    const remainingTime = stories[current].type === "video" 
+      ? videoDuration - elapsedTime 
+      : 5000 - elapsedTime;
 
     progress.stopAnimation();
-    progress.setValue(0);
+    progress.setValue(elapsedTime / (stories[current].type === "video" ? videoDuration : 5000));
+
+    animationStartTime.current = Date.now() - elapsedTime;
 
     Animated.timing(progress, {
       toValue: 1,
-      duration: stories[current].type === "video" ? videoDuration : 5000,
+      duration: remainingTime,
       useNativeDriver: false,
     }).start(({ finished }) => {
-      if (finished) {
+      if (finished && !isPaused) {
+        setElapsedTime(0);
         if (current < stories.length - 1) {
           setCurrent(current + 1);
         } else {
@@ -74,6 +87,29 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
         }
       }
     });
+  };
+
+  const handlePause = () => {
+    setIsPaused(true);
+    progress.stopAnimation();
+    pauseTime.current = Date.now();
+    setElapsedTime(pauseTime.current - animationStartTime.current);
+    
+    if (currentStory.type === 'video' && videoRef.current) {
+      videoRef.current.pauseAsync();
+    }
+  };
+
+  const handleResume = () => {
+    if (isPaused) { // Only resume if actually paused
+      setIsPaused(false);
+      animationStartTime.current = Date.now() - elapsedTime; // Update start time
+      startProgress();
+      
+      if (currentStory.type === 'video' && videoRef.current) {
+        videoRef.current.playAsync();
+      }
+    }
   };
 
   const nextStory = () => {
@@ -89,6 +125,46 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
       setCurrent(current - 1);
     } else {
       onPreviousUser();
+    }
+  };
+
+  const handlePressIn = () => {
+    // Clear any existing timeout
+    if (holdTimeout.current) {
+      clearTimeout(holdTimeout.current);
+    }
+    
+    // Set new timeout for hold detection
+    holdTimeout.current = setTimeout(() => {
+      setIsHolding(true);
+      handlePause();
+    }, 200);
+  };
+
+  const handlePressOut = () => {
+    // Clear the timeout if it exists
+    if (holdTimeout.current) {
+      clearTimeout(holdTimeout.current);
+    }
+    
+    // If we were holding, resume
+    if (isHolding) {
+      setIsHolding(false);
+      // Force state update before resuming
+      setImmediate(() => {
+        handleResume();
+      });
+    }
+  };
+
+  const handleTap = (side: 'left' | 'right') => {
+    // Only handle taps if we're not holding
+    if (!isHolding) {
+      if (side === 'right') {
+        nextStory();
+      } else {
+        previousStory();
+      }
     }
   };
 
@@ -205,10 +281,18 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
 
       {/* Navigation Controls */}
       <View className="absolute top-0 left-0 right-0 bottom-0 flex-row">
-        <TouchableWithoutFeedback onPress={previousStory}>
+        <TouchableWithoutFeedback 
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          onPress={() => handleTap('left')}
+        >
           <View className="flex-1" />
         </TouchableWithoutFeedback>
-        <TouchableWithoutFeedback onPress={nextStory}>
+        <TouchableWithoutFeedback 
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          onPress={() => handleTap('right')}
+        >
           <View className="flex-1" />
         </TouchableWithoutFeedback>
       </View>
