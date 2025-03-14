@@ -13,6 +13,7 @@ import {
 import { Video } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
 const { width, height } = Dimensions.get("window");
 
@@ -47,6 +48,8 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
   const pauseTime = useRef(0);
   const [isHolding, setIsHolding] = useState(false);
   const holdTimeout = useRef<NodeJS.Timeout | null>(null);
+  const [mediaLoaded, setMediaLoaded] = useState<boolean[]>(new Array(stories.length).fill(false));
+  const fadeAnim = useRef(new Animated.Value(0)).current; // Animation for fade-in effect
 
   // Ensure current is within bounds
   useEffect(() => {
@@ -58,24 +61,39 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
   useEffect(() => {
     if (stories.length > 0) {
       startProgress();
+      fadeIn(); // Trigger fade-in animation when the story changes
     }
   }, [current, stories]);
+
+  const fadeIn = () => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500, // Duration of the fade-in effect
+      useNativeDriver: true,
+    }).start();
+  };
 
   const startProgress = () => {
     if (!stories[current] || isPaused) return;
 
-    const remainingTime = stories[current].type === "video" 
-      ? videoDuration - elapsedTime 
-      : 5000 - elapsedTime;
+    const totalDuration = stories[current].type === "video" 
+      ? videoDuration 
+      : 5000;
 
+    // Stop any existing animation
     progress.stopAnimation();
-    progress.setValue(elapsedTime / (stories[current].type === "video" ? videoDuration : 5000));
 
+    // Reset elapsed time if starting fresh
+    if (elapsedTime >= totalDuration) {
+      setElapsedTime(0);
+    }
+
+    // Update the animation start time
     animationStartTime.current = Date.now() - elapsedTime;
 
     Animated.timing(progress, {
       toValue: 1,
-      duration: remainingTime,
+      duration: totalDuration - elapsedTime,
       useNativeDriver: false,
     }).start(({ finished }) => {
       if (finished && !isPaused) {
@@ -95,20 +113,20 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
     pauseTime.current = Date.now();
     setElapsedTime(pauseTime.current - animationStartTime.current);
     
-    if (currentStory.type === 'video' && videoRef.current) {
+    if (stories[current].type === 'video' && videoRef.current) {
       videoRef.current.pauseAsync();
     }
   };
 
   const handleResume = () => {
-    if (isPaused) { // Only resume if actually paused
-      setIsPaused(false);
-      animationStartTime.current = Date.now() - elapsedTime; // Update start time
-      startProgress();
-      
-      if (currentStory.type === 'video' && videoRef.current) {
-        videoRef.current.playAsync();
-      }
+    if (!isPaused) return;
+
+    setIsPaused(false);
+    animationStartTime.current = Date.now() - elapsedTime;
+    startProgress();
+    
+    if (stories[current].type === 'video' && videoRef.current) {
+      videoRef.current.playAsync();
     }
   };
 
@@ -129,12 +147,10 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
   };
 
   const handlePressIn = () => {
-    // Clear any existing timeout
     if (holdTimeout.current) {
       clearTimeout(holdTimeout.current);
     }
     
-    // Set new timeout for hold detection
     holdTimeout.current = setTimeout(() => {
       setIsHolding(true);
       handlePause();
@@ -142,15 +158,12 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
   };
 
   const handlePressOut = () => {
-    // Clear the timeout if it exists
     if (holdTimeout.current) {
       clearTimeout(holdTimeout.current);
     }
     
-    // If we were holding, resume
     if (isHolding) {
       setIsHolding(false);
-      // Force state update before resuming
       setImmediate(() => {
         handleResume();
       });
@@ -158,7 +171,6 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
   };
 
   const handleTap = (side: 'left' | 'right') => {
-    // Only handle taps if we're not holding
     if (!isHolding) {
       if (side === 'right') {
         nextStory();
@@ -168,7 +180,46 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
     }
   };
 
-  if (stories.length === 0) {
+  useEffect(() => {
+    if (stories[current]?.type === 'video' && videoRef.current) {
+      videoRef.current.getStatusAsync().then(status => {
+        if (status.isLoaded) {
+          setVideoDuration(status.durationMillis || 5000);
+        }
+      });
+    }
+  }, [current]);
+
+  useEffect(() => {
+    setElapsedTime(0);
+    progress.setValue(0);
+    startProgress();
+  }, [current]);
+
+  useEffect(() => {
+    const preloadMedia = async () => {
+      const loadPromises = stories.map(async (story, index) => {
+        if (story.type === "video") {
+          const video = new Video();
+          await video.loadAsync({ uri: story.media_url });
+        } else {
+          await Image.prefetch(story.media_url);
+        }
+        setMediaLoaded(prev => {
+          const newLoaded = [...prev];
+          newLoaded[index] = true;
+          return newLoaded;
+        });
+      });
+      await Promise.all(loadPromises);
+    };
+
+    if (stories.length > 0) {
+      preloadMedia();
+    }
+  }, [stories]);
+
+  if (stories.length === 0 || mediaLoaded.some(loaded => !loaded)) {
     return (
       <View className="flex-1 bg-black justify-center items-center">
         <ActivityIndicator size="large" color="#fff" />
@@ -186,19 +237,22 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
       <StatusBar backgroundColor="black" barStyle="light-content" />
 
       {/* Story Media (Video/Image) */}
-      <View className="absolute top-0 bottom-0 left-0 right-0">
+      <Animated.View style={{ opacity: fadeAnim, position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}>
         {currentStory.type === "video" ? (
           <Video
             ref={videoRef}
             source={{ uri: currentStory.media_url }}
             resizeMode="cover"
-            shouldPlay
+            shouldPlay={!isPaused}
+            isLooping={false}
             useNativeControls={false}
             className="w-full h-full"
             onPlaybackStatusUpdate={(status) => {
               if (status.isLoaded) {
                 setLoading(false);
-                setVideoDuration(status.durationMillis || 5000);
+                if (!isPaused && status.positionMillis && status.durationMillis) {
+                  setElapsedTime(status.positionMillis);
+                }
               }
             }}
           />
@@ -210,7 +264,14 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
             onLoadEnd={() => setLoading(false)}
           />
         )}
-      </View>
+      </Animated.View>
+
+      {/* Gradient Overlay */}
+      <LinearGradient
+        colors={["rgba(0,0,0,0.6)", "transparent", "rgba(0,0,0,0.6)"]}
+        locations={[0, 0.5, 1]}
+        className="absolute top-0 bottom-0 left-0 right-0"
+      />
 
       {/* Loading Indicator */}
       {loading && (
@@ -260,27 +321,59 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
       </View>
 
       {/* Caption & Action Buttons */}
-      <View className="absolute bottom-24 left-4 right-4">
-        {currentStory.caption && (
-          <Text className="text-white pb-20 bg-black text-lg font-medium mb-4">
-            {currentStory.caption}
+      <View className="absolute bottom-10 w-[100%] flex-row items-end justify-between">
+        {/* Caption Container */}
+        <View className="flex-1 bg-black/30 rounded-2xl p-4 mr-4">
+          {/* Title Caption */}
+          <Text className="text-white text-xl font-bold mb-1">
+            {currentStory.user.username}'s Story
           </Text>
-        )}
-        <View className="absolute bottom-4 right-4 flex-col space-y-4">
-          <TouchableOpacity className="bg-black/50 p-3 rounded-full">
+          {/* Story Caption */}
+          {currentStory.caption ? (
+            <Text className="text-white text-lg font-medium leading-6">
+              {currentStory.caption}
+            </Text>
+          ) : (
+            <Text className="text-gray-400 text-lg font-medium leading-6">
+              No caption available
+            </Text>
+          )}
+        </View>
+
+        {/* Icons on Right Side */}
+        <View className="flex-row bottom-10 right-5 gap-3">
+          <TouchableOpacity 
+            className="bg-white/10 p-3 rounded-full"
+            onPress={(e) => {
+              e.stopPropagation();
+              // Add your like functionality here
+            }}
+          >
             <Ionicons name="heart" size={24} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity className="bg-black/50 p-3 rounded-full">
+          <TouchableOpacity 
+            className="bg-white/10 p-3 rounded-full"
+            onPress={(e) => {
+              e.stopPropagation();
+              // Add your comment functionality here
+            }}
+          >
             <Ionicons name="chatbubble" size={24} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity className="bg-black/50 p-3 rounded-full">
+          <TouchableOpacity 
+            className="bg-white/10 p-3 rounded-full"
+            onPress={(e) => {
+              e.stopPropagation();
+              // Add your share functionality here
+            }}
+          >
             <Ionicons name="paper-plane" size={24} color="white" />
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Navigation Controls */}
-      <View className="absolute top-0 left-0 right-0 bottom-0 flex-row">
+      <View className="absolute top-0 left-0 right-0 h-[85%] flex-row">
         <TouchableWithoutFeedback 
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}

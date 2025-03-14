@@ -9,6 +9,7 @@ interface Story {
   user_id: string;
   media_url: string;
   created_at: string;
+  caption?: string;
   user: {
     username: string;
     avatar_url: string;
@@ -27,7 +28,7 @@ export default function StoryList() {
       
       const { data, error } = await supabase
         .from("stories")
-        .select("id, media_url, created_at, user_id, user:users(username, avatar_url)")
+        .select("id, media_url, created_at, user_id, caption, user:users(username, avatar_url)")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -92,8 +93,8 @@ export default function StoryList() {
               <Image
                 source={{ uri: firstStory ? firstStory.user.avatar_url : "https://via.placeholder.com/60" }}
                 style={{
-                  width: 60,
-                  height: 60,
+                  width: 70,
+                  height: 70,
                   borderRadius: 30,
                   borderWidth: 2,
                   borderColor: firstStory ? "#ff8501" : "#ccc",

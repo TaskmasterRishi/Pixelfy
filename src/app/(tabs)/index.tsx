@@ -165,10 +165,7 @@ export default function FeedScreen() {
       </Animated.View>
 
       {/* Content */}
-      <View className="flex-1 bg-gray-100 pt-16 pb-5">
-        {/* Story List */}
-        <StoryList />
-
+      <View className="flex-1 bg-gray-100 pb-5">
         {loading && posts.length === 0 ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator size="large" color="#000" />
@@ -180,7 +177,12 @@ export default function FeedScreen() {
             renderItem={({ item }) => <PostListItem post={item} />}
             onScroll={handleScroll}
             scrollEventThrottle={16}
-            contentContainerStyle={{ paddingTop: 10 }}
+            contentContainerStyle={{ paddingTop: 50 }}
+            ListHeaderComponent={
+              <View className="bg-white">
+                <StoryList />
+              </View>
+            }
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
