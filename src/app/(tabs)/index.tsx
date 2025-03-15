@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Easing,
 } from "react-native";
 import { supabase } from "~/src/lib/supabase";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -32,6 +33,9 @@ export default function FeedScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const lastScrollY = useRef(0);
   const headerTranslateY = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const iconAnim = useRef(new Animated.Value(1)).current;
+  const ringAnim = useRef(new Animated.Value(0)).current;
 
   const [fontsLoaded] = useFonts({
     "OnryDisplay-Bold": require("~/assets/fonts/nicolassfonts-onrydisplay-extrabold.otf"),
@@ -171,6 +175,120 @@ export default function FeedScreen() {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (hasUnseenNotifications) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.2,
+            duration: 500,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 500,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }
+  }, [hasUnseenNotifications]);
+
+  useEffect(() => {
+    if (hasUnseenNotifications) {
+      const shake = Animated.loop(
+        Animated.sequence([
+          Animated.timing(iconAnim, {
+            toValue: 1.1,
+            duration: 200,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          Animated.timing(iconAnim, {
+            toValue: 0.9,
+            duration: 200,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          Animated.timing(iconAnim, {
+            toValue: 1,
+            duration: 200,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      shake.start();
+      return () => shake.stop();
+    } else {
+      iconAnim.setValue(1);
+    }
+  }, [hasUnseenNotifications]);
+
+  useEffect(() => {
+    if (hasUnseenNotifications) {
+      const ring = Animated.loop(
+        Animated.sequence([
+          // First swing
+          Animated.timing(ringAnim, {
+            toValue: 1,
+            duration: 200,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          Animated.timing(ringAnim, {
+            toValue: -1,
+            duration: 200,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          Animated.timing(ringAnim, {
+            toValue: 0,
+            duration: 200,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          // Pause
+          Animated.delay(1000), // 1 second pause
+          // Second swing
+          Animated.timing(ringAnim, {
+            toValue: 1,
+            duration: 200,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          Animated.timing(ringAnim, {
+            toValue: -1,
+            duration: 200,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          Animated.timing(ringAnim, {
+            toValue: 0,
+            duration: 200,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          // Longer pause
+          Animated.delay(2000), // 2 second pause
+        ])
+      );
+      ring.start();
+      return () => ring.stop();
+    } else {
+      ringAnim.setValue(0); // Reset animation when no unseen notifications
+    }
+  }, [hasUnseenNotifications]);
+
+  const rotateInterpolate = ringAnim.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: ['-15deg', '0deg', '15deg']
+  });
+
   if (!fontsLoaded) {
     return <ActivityIndicator size="large" color="#000" />;
   }
@@ -202,7 +320,16 @@ export default function FeedScreen() {
         <Text style={{ fontSize: 24, fontFamily: "OnryDisplay-Bold" }}>Pixelfy</Text>
         <TouchableOpacity onPress={handleNotificationPress} activeOpacity={1}>
           <View className="relative">
-            <Ionicons name="notifications" size={28} color="black" />
+            <Animated.View 
+              style={{
+                transform: [
+                  { rotate: rotateInterpolate },
+                  { perspective: 1000 }
+                ]
+              }}
+            >
+              <Ionicons name="notifications" size={28} color="black" />
+            </Animated.View>
             {hasUnseenNotifications && (
               <View className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
             )}

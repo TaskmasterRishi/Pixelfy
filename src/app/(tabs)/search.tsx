@@ -4,7 +4,8 @@ import { useAuth } from '../../providers/AuthProvider';
 import { supabase } from '../../lib/supabase';
 import { FontAwesome } from '@expo/vector-icons';
 import MasonryList from '@react-native-seoul/masonry-list';
-import FollowRequest from '../../Components/FollowRequest';
+import FollowRequest from '../../Components/FriendRequest';
+import Toast from 'react-native-toast-message';
 
 export default function SearchPage() {
   const { user } = useAuth();
@@ -65,13 +66,13 @@ export default function SearchPage() {
     }
   };
 
-  const renderUserCard = (user) => (
-    <View key={user.id} className="w-[48%] mb-4 bg-white rounded-lg shadow-sm p-3">
+  const renderUserCard = (cardUser) => (
+    <View key={cardUser.id} className="w-[48%] mb-4 bg-white rounded-lg shadow-sm p-3">
       <View className="items-center">
         <View className="w-20 h-20 rounded-full overflow-hidden border-2 border-white shadow-md">
-          {user.avatar_url ? (
+          {cardUser.avatar_url ? (
             <Image
-              source={{ uri: user.avatar_url }}
+              source={{ uri: cardUser.avatar_url }}
               className="w-full h-full"
               resizeMode="cover"
             />
@@ -82,15 +83,15 @@ export default function SearchPage() {
           )}
         </View>
         <Text className="font-semibold mt-2 text-center" numberOfLines={1}>
-          {user.username}
+          {cardUser.username}
         </Text>
-        {user.bio && (
+        {cardUser.bio && (
           <Text className="text-gray-600 text-xs text-center mt-1" numberOfLines={2}>
-            {user.bio}
+            {cardUser.bio}
           </Text>
         )}
         <FollowRequest 
-          targetId={user.id}
+          targetId={cardUser.id}
           requesterId={user.id}
           onRequestSent={() => {
             // Optional: Add any additional logic you want to run after request is sent
@@ -153,6 +154,7 @@ export default function SearchPage() {
           )}
         </ScrollView>
       )}
+      <Toast />
     </View>
   );
 } 
