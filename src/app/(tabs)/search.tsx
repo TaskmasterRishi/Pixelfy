@@ -6,6 +6,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import MasonryList from '@react-native-seoul/masonry-list';
 import FollowRequest from '../../Components/FriendRequest';
 import Toast from 'react-native-toast-message';
+import { router } from 'expo-router';
 
 export default function SearchPage() {
   const { user } = useAuth();
@@ -14,39 +15,103 @@ export default function SearchPage() {
   const [publicUsers, setPublicUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [followStatuses, setFollowStatuses] = useState<Record<string, boolean>>({});
+  const [isFollowUpdating, setIsFollowUpdating] = useState<Record<string, boolean>>({});
 
   const fetchPublicUsers = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, username, avatar_url, bio')
-      .eq('is_private', false)
-      .neq('id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, username, avatar_url, bio')
+        .eq('is_private', false)
+        .neq('id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
 
-    if (!error) {
-      setPublicUsers(data);
+      if (!error) {
+        setPublicUsers(data);
+        fetchFollowStatuses(data.map(user => user.id));
+      }
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
+  };
+
+  const fetchFollowStatuses = async (userIds: string[]) => {
+    try {
+      const { data, error } = await supabase
+        .from('friends')
+        .select('friend_id')
+        .eq('user_id', user.id)
+        .in('friend_id', userIds);
+
+      if (!error) {
+        const statuses = userIds.reduce((acc, id) => {
+          acc[id] = data.some(record => record.friend_id === id);
+          return acc;
+        }, {} as Record<string, boolean>);
+        setFollowStatuses(prev => ({ ...prev, ...statuses }));
+      }
+    } catch (error) {
+      console.error('Error fetching follow statuses:', error);
+    }
   };
 
   const handleSearch = async (query) => {
     if (query.length > 2) {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, username, avatar_url, bio')
-        .ilike('username', `%${query}%`)
-        .neq('id', user.id);
-      
-      if (!error) {
-        setSearchResults(data);
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, username, avatar_url, bio')
+          .ilike('username', `%${query}%`)
+          .neq('id', user.id);
+        
+        if (!error) {
+          setSearchResults(data);
+          fetchFollowStatuses(data.map(user => user.id));
+        }
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     } else {
       setSearchResults([]);
       fetchPublicUsers();
+    }
+  };
+
+  const handleFollow = async (userId: string) => {
+    if (isFollowUpdating[userId]) return;
+    
+    setIsFollowUpdating(prev => ({ ...prev, [userId]: true }));
+    
+    try {
+      if (followStatuses[userId]) {
+        // Unfollow
+        const { error } = await supabase
+          .from('friends')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('friend_id', userId);
+        
+        if (!error) {
+          setFollowStatuses(prev => ({ ...prev, [userId]: false }));
+        }
+      } else {
+        // Follow
+        const { error } = await supabase
+          .from('friends')
+          .insert([{ user_id: user.id, friend_id: userId }]);
+        
+        if (!error) {
+          setFollowStatuses(prev => ({ ...prev, [userId]: true }));
+        }
+      }
+    } catch (error) {
+      console.error('Error updating follow status:', error);
+    } finally {
+      setIsFollowUpdating(prev => ({ ...prev, [userId]: false }));
     }
   };
 
@@ -67,7 +132,11 @@ export default function SearchPage() {
   };
 
   const renderUserCard = (cardUser) => (
-    <View key={cardUser.id} className="w-[48%] mb-4 bg-white rounded-lg shadow-sm p-3">
+    <Pressable 
+      key={cardUser.id} 
+      className="w-[48%] mb-4 bg-white rounded-lg shadow-sm p-3"
+      onPress={() => router.push(`/(screens)/viewProfile?userId=${cardUser.id}`)}
+    >
       <View className="items-center">
         <View className="w-20 h-20 rounded-full overflow-hidden border-2 border-white shadow-md">
           {cardUser.avatar_url ? (
@@ -93,12 +162,13 @@ export default function SearchPage() {
         <FollowRequest 
           targetId={cardUser.id}
           requesterId={user.id}
-          onRequestSent={() => {
-            // Optional: Add any additional logic you want to run after request is sent
-          }}
+          isFollowing={followStatuses[cardUser.id] || false}
+          isUpdating={isFollowUpdating[cardUser.id] || false}
+          onRequestSent={() => handleFollow(cardUser.id)}
+          onUnfollow={() => handleFollow(cardUser.id)}
         />
       </View>
-    </View>
+    </Pressable>
   );
 
   return (

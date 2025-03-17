@@ -19,7 +19,7 @@ export default function RootLayout() {
                     screenOptions={{ 
                         headerShown: false,
                         contentStyle: { backgroundColor: 'white' },
-                        animation: 'none' // Disable animations for faster transitions
+                        animation: 'slide_from_right' // Add animation for smoother transitions
                     }}
                 >
                     <Stack.Screen name="(auth)" />
@@ -30,6 +30,7 @@ export default function RootLayout() {
                             presentation: 'modal'
                         }} 
                     />
+                    <Stack.Screen name="notification" />
                 </Stack>
             </AuthProvider>
         </SafeAreaProvider>

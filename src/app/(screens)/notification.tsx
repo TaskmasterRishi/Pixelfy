@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -6,17 +6,134 @@ import {
   ActivityIndicator,
   Pressable,
   Image,
+  SafeAreaView,
+  Animated,
+  Easing,
 } from "react-native";
 import { useAuth } from "../../providers/AuthProvider";
 import { supabase } from "../../lib/supabase";
 import { FontAwesome } from "@expo/vector-icons";
 import { ToastAndroid } from "react-native";
+import { useNavigation } from '@react-navigation/native';
+
+// Create a separate component for NotificationItem
+const NotificationItem = ({ item, index }) => {
+  const translateY = useRef(new Animated.Value(50)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(index * 50),
+      Animated.parallel([
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+  }, [index]);
+
+  let message = "";
+  let iconName = "bell";
+  let iconColor = "#3b82f6";
+  
+  switch (item.type) {
+    case "follow_request":
+      message = `${item.sender.username} sent you a follow request`;
+      iconName = "user-plus";
+      iconColor = "#3b82f6";
+      break;
+    case "friend_accepted":
+      message = `${item.sender.username} accepted your friend request`;
+      iconName = "check-circle";
+      iconColor = "#10b981";
+      break;
+    case "like":
+      message = `${item.sender.username} liked your post`;
+      iconName = "heart";
+      iconColor = "#ef4444";
+      break;
+    case "comment":
+      message = `${item.sender.username} commented on your post`;
+      iconName = "comment";
+      iconColor = "#f59e0b";
+      break;
+    case "mention":
+      message = `${item.sender.username} mentioned you in a post`;
+      iconName = "at";
+      iconColor = "#8b5cf6";
+      break;
+    default:
+      message = "New notification";
+  }
+
+  return (
+    <Animated.View
+      style={{
+        transform: [{ translateY }],
+        opacity,
+      }}
+    >
+      <View className="p-5 border-b border-gray-100 bg-white">
+        <View className="flex-row items-center space-x-4">
+          {item.sender.avatar_url ? (
+            <Image
+              source={{ uri: item.sender.avatar_url }}
+              className="w-14 h-14 rounded-full border-2 border-white shadow-sm"
+            />
+          ) : (
+            <View className="w-14 h-14 rounded-full bg-gray-100 justify-center items-center border-2 border-white shadow-sm">
+              <FontAwesome name="user" size={28} color="#6b7280" />
+            </View>
+          )}
+          
+          <View className="flex-1">
+            <View className="flex-row items-center space-x-2">
+              <FontAwesome name={iconName} size={16} color={iconColor} />
+              <Text className="text-base font-semibold text-gray-800">{message}</Text>
+            </View>
+            <Text className="text-xs text-gray-400 mt-1.5">
+              {new Date(item.created_at).toLocaleString()}
+            </Text>
+          </View>
+
+          {item.type === "follow_request" && (
+            <View className="flex-row space-x-2">
+              <Pressable
+                className="bg-green-500 px-4 py-2 rounded-lg active:bg-green-600 shadow-sm"
+                onPress={() => handleAcceptFollowRequest(item.id, item.sender.id)}
+              >
+                <Text className="text-white text-sm font-medium">Accept</Text>
+              </Pressable>
+
+              <Pressable
+                className="bg-red-500 px-4 py-2 rounded-lg active:bg-red-600 shadow-sm"
+                onPress={() => handleRejectFollowRequest(item.id, item.sender.id)}
+              >
+                <Text className="text-white text-sm font-medium">Reject</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+      </View>
+    </Animated.View>
+  );
+};
 
 export default function NotificationScreen() {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all"); // 'all', 'follow_requests', 'likes', 'comments'
+  const [filter, setFilter] = useState("all"); // 'all', 'follow_request', 'friend_accepted', 'like', 'comment', 'mention'
+  const navigation = useNavigation();
+  const fadeAnim = useRef(new Animated.Value(0)).current; // For fade-in effect
+  const scaleAnim = useRef(new Animated.Value(0.95)).current; // For scale effect
 
   const fetchNotifications = async () => {
     try {
@@ -125,83 +242,59 @@ export default function NotificationScreen() {
     fetchNotifications();
   }, [filter]);
 
-  const renderNotification = ({ item }) => {
-    let message = "";
-    switch (item.type) {
-      case "follow_request":
-        message = `${item.sender.username} sent you a follow request`;
-        break;
-      case "friend_accepted":
-        message = `${item.sender.username} accepted your friend request`;
-        break;
-      // Add more cases as needed
-      default:
-        message = "New notification";
-    }
+  useEffect(() => {
+    // Fade-in animation
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
 
-    return (
-      <View className="p-4 border-b border-gray-100">
-        <View className="flex-row items-center">
-          {item.sender.avatar_url ? (
-            <Image
-              source={{ uri: item.sender.avatar_url }}
-              className="w-10 h-10 rounded-full mr-3"
-            />
-          ) : (
-            <View className="w-10 h-10 rounded-full bg-gray-200 mr-3 justify-center items-center">
-              <FontAwesome name="user" size={20} color="#6b7280" />
-            </View>
-          )}
-          <View className="flex-1">
-            <Text className="text-base font-medium">{message}</Text>
-            <Text className="text-xs text-gray-500 mt-1">
-              {new Date(item.created_at).toLocaleString()}
-            </Text>
-          </View>
+    // Scale animation
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
-          {/* Accept/Reject Buttons for Follow Requests */}
-          {item.type === "follow_request" && (
-            <View className="flex-row">
-              <Pressable
-                className="ml-2 bg-blue-500 px-3 py-1 rounded-full"
-                onPress={() => handleAcceptFollowRequest(item.id, item.sender.id)}
-              >
-                <Text className="text-white text-sm">Accept</Text>
-              </Pressable>
-
-              <Pressable
-                className="ml-2 bg-red-500 px-3 py-1 rounded-full"
-                onPress={() => handleRejectFollowRequest(item.id, item.sender.id)}
-              >
-                <Text className="text-white text-sm">Reject</Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
-      </View>
-    );
+  const renderNotification = ({ item, index }) => {
+    return <NotificationItem item={item} index={index} />;
   };
 
   return (
-    <View className="flex-1 bg-gray-50">
-      <View className="p-4 bg-white shadow-sm">
-        <Text className="text-2xl font-bold text-gray-900">Notifications</Text>
+    <Animated.View
+      style={{
+        flex: 1,
+        backgroundColor: 'white',
+        opacity: fadeAnim,
+        transform: [{ scale: scaleAnim }],
+      }}
+    >
+      <View className="p-6 bg-white shadow-sm border-b border-gray-100 mt-14">
+        <View className="flex-row items-center justify-between mb-4">
+          <Text className="text-3xl font-bold text-gray-900">Notifications</Text>
+          <Pressable className="p-2">
+            <FontAwesome name="bell" size={24} color="#3b82f6" />
+          </Pressable>
+        </View>
+        
         {/* Filter Buttons */}
-        <View className="flex-row mt-3 space-x-2">
-          {["all", "follow_request", "friend_accepted"].map((f) => (
+        <View className="flex-row flex-wrap gap-2">
+          {["all", "follow_request", "friend_accepted", "like", "comment", "mention"].map((f) => (
             <Pressable
               key={f}
-              className={`px-3 py-1 rounded-full ${
+              className={`px-4 py-2 rounded-full ${
                 filter === f ? "bg-blue-500" : "bg-gray-100"
-              }`}
+              } active:bg-blue-600 shadow-sm`}
               onPress={() => setFilter(f)}
             >
               <Text
-                className={`text-xs ${
+                className={`text-sm ${
                   filter === f ? "text-white" : "text-gray-700"
-                }`}
+                } font-medium`}
               >
-                {f.charAt(0).toUpperCase() + f.slice(1)}
+                {f.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
               </Text>
             </Pressable>
           ))}
@@ -209,23 +302,34 @@ export default function NotificationScreen() {
       </View>
 
       {loading ? (
-        <View className="flex-1 justify-center items-center">
+        <Animated.View
+          style={{ opacity: fadeAnim }}
+          className="flex-1 justify-center items-center bg-gray-50"
+        >
           <ActivityIndicator size="large" color="#3b82f6" />
-        </View>
+          <Text className="text-gray-500 mt-3">Loading notifications...</Text>
+        </Animated.View>
       ) : (
         <FlatList
           data={notifications}
           renderItem={renderNotification}
           keyExtractor={(item) => item.id}
           ListEmptyComponent={
-            <View className="flex-1 justify-center items-center p-4">
-              <FontAwesome name="bell-slash" size={24} color="#9ca3af" />
-              <Text className="text-gray-500 mt-2">No notifications</Text>
-            </View>
+            <Animated.View
+              style={{ opacity: fadeAnim }}
+              className="flex-1 justify-center items-center p-4 bg-gray-50"
+            >
+              <View className="bg-white p-8 rounded-xl shadow-sm items-center space-y-4">
+                <FontAwesome name="bell-slash" size={40} color="#9ca3af" />
+                <Text className="text-gray-500 text-center text-lg">No notifications yet</Text>
+                <Text className="text-gray-400 text-center">You're all caught up!</Text>
+              </View>
+            </Animated.View>
           }
           contentContainerStyle={{ paddingBottom: 20 }}
+          className="bg-gray-50"
         />
       )}
-    </View>
+    </Animated.View>
   );
 }
