@@ -59,6 +59,8 @@ const ProfileScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMorePosts, setHasMorePosts] = useState(true);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
 
   useEffect(() => {
     if (user) {
@@ -69,7 +71,7 @@ const ProfileScreen = () => {
   const fetchProfile = async () => {
     setIsLoading(true);
     try {
-      const [profileResponse, postsResponse] = await Promise.all([
+      const [profileResponse, postsResponse, followersResponse, followingResponse] = await Promise.all([
         supabase
           .from('users')
           .select('id, username, full_name, email, avatar_url, bio, website, is_private, verified')
@@ -87,11 +89,21 @@ const ProfileScreen = () => {
           `)
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
-          .range(0, 9) // Only fetch first 10 posts initially
+          .range(0, 9), // Only fetch first 10 posts initially
+        supabase
+          .from('friends')
+          .select('friend_id', { count: 'exact' })
+          .eq('friend_id', user.id), // Count followers
+        supabase
+          .from('friends')
+          .select('user_id', { count: 'exact' })
+          .eq('user_id', user.id) // Count following
       ]);
 
       if (profileResponse.error) throw profileResponse.error;
       if (postsResponse.error) throw postsResponse.error;
+      if (followersResponse.error) throw followersResponse.error;
+      if (followingResponse.error) throw followingResponse.error;
 
       setProfile(profileResponse.data);
       setUsername(profileResponse.data.username || '');
@@ -105,6 +117,14 @@ const ProfileScreen = () => {
       setPosts(processedPosts || []);
       setPostsCount(processedPosts.length || 0);
       setHasMorePosts(processedPosts.length >= 10);
+
+      // Update follower and following counts
+      const followersCount = followersResponse.count || 0;
+      const followingCount = followingResponse.count || 0;
+
+      // Set the counts in state (you'll need to create these states)
+      setFollowersCount(followersCount);
+      setFollowingCount(followingCount);
 
     } catch (error) {
       console.error('Error fetching profile data:', error.message);
@@ -178,14 +198,6 @@ const ProfileScreen = () => {
         throw new Error('Failed to upload image to Cloudinary');
       }
 
-      // Update Supabase with new avatar URL
-      const { error } = await supabase
-        .from('users')
-        .update({ avatar_url: imageUrl })
-        .eq('id', user.id);
-
-      if (error) throw error;
-
       // Delete old avatar if it exists
       if (oldAvatarUrl) {
         try {
@@ -193,12 +205,20 @@ const ProfileScreen = () => {
           const urlParts = oldAvatarUrl.split('/');
           const publicId = urlParts[urlParts.length - 1].split('.')[0];
           console.log('Extracted Public ID:', publicId); // Debug log
-          await deleteImage(publicId);
+          await deleteImage(publicId); // Delete from Cloudinary first
         } catch (error) {
-          console.error('Error deleting old avatar:', error);
+          console.error('Error deleting old avatar from Cloudinary:', error);
           // Continue even if deletion fails
         }
       }
+
+      // Update Supabase with new avatar URL
+      const { error } = await supabase
+        .from('users')
+        .update({ avatar_url: imageUrl })
+        .eq('id', user.id);
+
+      if (error) throw error;
 
       Alert.alert('Success', 'Profile picture updated successfully');
       await fetchProfile();
@@ -353,11 +373,11 @@ const ProfileScreen = () => {
                 <Text className="text-gray-500">Posts</Text>
               </View>
               <TouchableOpacity className="items-center">
-                <Text className="text-xl font-bold text-gray-900">0</Text>
+                <Text className="text-xl font-bold text-gray-900">{followersCount}</Text>
                 <Text className="text-gray-500">Followers</Text>
               </TouchableOpacity>
               <TouchableOpacity className="items-center">
-                <Text className="text-xl font-bold text-gray-900">0</Text>
+                <Text className="text-xl font-bold text-gray-900">{followingCount}</Text>
                 <Text className="text-gray-500">Following</Text>
               </TouchableOpacity>
             </View>

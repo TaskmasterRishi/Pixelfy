@@ -10,6 +10,8 @@ import { Alert } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
+import { deleteImage } from '../lib/cloudinary';
+import Toast from 'react-native-toast-message';
 
 interface Comment {
   id: string;
@@ -256,6 +258,17 @@ const ViewImage: React.FC<ViewImageProps> = ({
           style: 'destructive',
           onPress: async () => {
             try {
+              // Extract public ID from image URL
+              const urlParts = imageUrl.split('/');
+              const publicId = urlParts[urlParts.length - 1].split('.')[0];
+
+              // Delete image from Cloudinary
+              const deleteSuccess = await deleteImage(publicId);
+              if (!deleteSuccess) {
+                throw new Error('Failed to delete image from Cloudinary');
+              }
+
+              // Now delete the post from Supabase
               const { error } = await supabase
                 .from('posts')
                 .delete()
@@ -264,7 +277,13 @@ const ViewImage: React.FC<ViewImageProps> = ({
 
               if (error) throw error;
 
-              Alert.alert('Success', 'Post deleted successfully');
+              // Show success toast message
+              Toast.show({
+                text1: 'Success',
+                text2: 'Post deleted successfully',
+                type: 'success',
+              });
+
               onClose();
             } catch (error) {
               console.error('Error deleting post:', error);

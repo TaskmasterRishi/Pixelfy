@@ -71,7 +71,7 @@ export const deleteImage = async (publicId: string) => {
     const signature = await generateSignature(publicId, timestamp);
 
     const response = await fetch(
-      `https://api.cloudinary.com/v1_1/dbcgxsh5x/image/destroy`,
+      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/destroy`,
       {
         method: 'POST',
         headers: {
@@ -79,7 +79,7 @@ export const deleteImage = async (publicId: string) => {
         },
         body: JSON.stringify({
           public_id: publicId,
-          api_key: '862634424731423',
+          api_key: API_KEY,
           timestamp,
           signature,
         }),
@@ -93,7 +93,7 @@ export const deleteImage = async (publicId: string) => {
 
     const result = await response.json();
     console.log('Delete result:', result); // Debug log
-    return result.result === "ok";
+    return result.result === "ok"; // Return success status
   } catch (error) {
     console.error("Error deleting image:", error);
     throw error;

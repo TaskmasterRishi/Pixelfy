@@ -338,7 +338,7 @@ export default function FeedScreen() {
       </Animated.View>
 
       {/* Content */}
-      <View className="flex-1 bg-gray-100 pb-5">
+      <View className="flex-1 bg-gray-100 pb-0">
         {loading && posts.length === 0 ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator size="large" color="#000" />
