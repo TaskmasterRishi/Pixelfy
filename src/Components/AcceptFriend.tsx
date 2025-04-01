@@ -1,71 +1,78 @@
-import React, { useState } from 'react';
-import { Pressable, Text, ToastAndroid } from 'react-native';
-import { supabase } from '~/src/lib/supabase';
+import { supabase } from '~/lib/supabase';
+import { sendFriendRequest } from './FriendRequest';
 
-interface AcceptFriendProps {
-  requesterId: string;
-  targetId: string;
-  onAccepted?: () => void;
-}
+export const handleFriendAcceptance = async (userId: string, senderId: string) => {
+  try {
+    // Update follow request status
+    const { error: updateError } = await supabase
+      .from('follow_requests')
+      .update({ status: 'Accepted' })
+      .eq('requester_id', senderId)
+      .eq('target_id', userId);
 
-const AcceptFriend: React.FC<AcceptFriendProps> = ({ requesterId, targetId, onAccepted }) => {
-  const [isLoading, setIsLoading] = useState(false);
+    if (updateError) throw updateError;
 
-  const handleAccept = async () => {
-    setIsLoading(true);
-    try {
-      // Update follow request status to "Accepted"
-      const { error: updateError } = await supabase
-        .from("follow_requests")
-        .update({ status: "Accepted" })
-        .eq("requester_id", requesterId)
-        .eq("target_id", targetId);
+    // Create one-way friendship
+    const { error: friendError } = await supabase
+      .from('friends')
+      .insert([{ user_id: userId, friend_id: senderId }]);
 
-      if (updateError) throw updateError;
+    if (friendError) throw friendError;
 
-      // Add both users as friends
-      const { error: friendError } = await supabase
-        .from("friends")
-        .insert([
-          { user_id: targetId, friend_id: requesterId, created_at: new Date().toISOString() },
-          { user_id: requesterId, friend_id: targetId, created_at: new Date().toISOString() }
-        ]);
+    // Check if the user is following back
+    const { data: isFollowingBack } = await supabase
+      .from('friends')
+      .select()
+      .eq('user_id', senderId)
+      .eq('friend_id', userId)
+      .single();
 
-      if (friendError) throw friendError;
+    // If not following back, create a follow_back notification
+    if (!isFollowingBack) {
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert({
+          type: 'follow_back',
+          user_id: userId,
+          sender_id: senderId
+        });
 
-      // Update notification instead of deleting it
-      await supabase
-        .from("notifications")
-        .update({ 
-          type: 'friend_accepted',
-          seen: false,
-          created_at: new Date().toISOString()
-        })
-        .eq('sender_id', requesterId)
-        .eq('user_id', targetId)
-        .eq('type', 'follow_request');
-
-      if (onAccepted) onAccepted();
-      ToastAndroid.show('Friend request accepted', ToastAndroid.SHORT);
-    } catch (error) {
-      ToastAndroid.show('Error accepting request', ToastAndroid.SHORT);
-      console.error('Error:', error);
-    } finally {
-      setIsLoading(false);
+      if (notificationError) throw notificationError;
     }
-  };
 
-  return (
-    <Pressable
-      className="bg-green-500 px-3 py-1 rounded-full"
-      onPress={handleAccept}
-      disabled={isLoading}
-    >
-      <Text className="text-white text-xs">
-        {isLoading ? "Accepting..." : "Accept"}
-      </Text>
-    </Pressable>
-  );
+    return true;
+  } catch (error) {
+    console.error('Error in handleFriendAcceptance:', error);
+    return false;
+  }
 };
 
-export default AcceptFriend;
+export const followBack = async (userId: string, followerId: string) => {
+  try {
+    // Send follow request back
+    const { success } = await sendFriendRequest(userId, followerId);
+    
+    if (success) {
+      // Check if mutual follow exists
+      const { data: mutualFollow } = await supabase
+        .from('follow_requests')
+        .select('*')
+        .eq('requester_id', followerId)
+        .eq('target_id', userId)
+        .eq('status', 'Accepted');
+
+      if (mutualFollow && mutualFollow.length > 0) {
+        // Create mutual friendship
+        await supabase.from('friends').insert([
+          { user_id: userId, friend_id: followerId },
+          { user_id: followerId, friend_id: userId }
+        ]);
+      }
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error in followBack:', error);
+    return false;
+  }
+};

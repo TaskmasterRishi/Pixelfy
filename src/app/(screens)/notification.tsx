@@ -15,11 +15,103 @@ import { supabase } from "../../lib/supabase";
 import { FontAwesome } from "@expo/vector-icons";
 import { ToastAndroid } from "react-native";
 import { useNavigation } from '@react-navigation/native';
+import { handleFriendAcceptance, followBack } from "../../Components/AcceptFriend";
+import { useRouter } from "expo-router";
+import { sendFriendRequest } from "../../Components/FriendRequest";
 
-// Create a separate component for NotificationItem
-const NotificationItem = ({ item, index }) => {
+// Update NotificationItem props interface
+interface NotificationItemProps {
+  item: any;
+  index: number;
+  onReject: (notificationId: string, senderId: string) => void;
+  fetchNotifications: () => void;
+}
+
+const NotificationItem: React.FC<NotificationItemProps> = ({ 
+  item, 
+  index,
+  onReject,
+  fetchNotifications
+}) => {
+  const { user } = useAuth();
+  const [isFollowing, setIsFollowing] = useState(false);
+  const navigation = useNavigation();
+  const router = useRouter();
   const translateY = useRef(new Animated.Value(50)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+
+  const handlePress = () => {
+    router.push({
+      pathname: '/viewProfile',
+      params: { userId: item.sender.id }
+    });
+  };
+
+  const handleAcceptFollowRequest = async (notificationId: string, senderId: string) => {
+    try {
+      const success = await handleFriendAcceptance(user.id, senderId);
+      if (success) {
+        // Only update the existing notification type to friend_accepted
+        const { error } = await supabase
+          .from('notifications')
+          .update({ type: 'friend_accepted' })
+          .eq('id', notificationId);
+
+        if (error) {
+          throw error;
+        }
+
+        // Refresh notifications
+        fetchNotifications();
+      }
+    } catch (error) {
+      console.error('Error accepting follow request:', error);
+    }
+  };
+
+  const handleFollowBack = async (senderId: string) => {
+    try {
+      const success = await followBack(user.id, senderId);
+      if (success) {
+        // Remove the follow_back notification
+        await supabase
+          .from('notifications')
+          .delete()
+          .eq('id', item.id);
+
+        // Refresh notifications
+        fetchNotifications();
+      }
+    } catch (error) {
+      console.error('Error following back:', error);
+    }
+  };
+
+  // Add function to check if following
+  const checkIfFollowing = async (senderId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('friends')
+        .select()
+        .or(`and(user_id.eq.${user.id},friend_id.eq.${senderId}),and(user_id.eq.${senderId},friend_id.eq.${user.id})`)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 is the code for no rows found
+        throw error;
+      }
+      
+      setIsFollowing(!!data);
+    } catch (error) {
+      console.error('Error checking follow status:', error);
+      setIsFollowing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (item.type === 'follow_back') {
+      checkIfFollowing(item.sender.id);
+    }
+  }, [item, user.id]);
 
   useEffect(() => {
     Animated.sequence([
@@ -39,38 +131,43 @@ const NotificationItem = ({ item, index }) => {
     ]).start();
   }, [index]);
 
-  let message = "";
+  let action = "";
   let iconName = "bell";
   let iconColor = "#3b82f6";
   
   switch (item.type) {
     case "follow_request":
-      message = `${item.sender.username} sent you a follow request`;
+      action = "sent you a follow request";
       iconName = "user-plus";
       iconColor = "#3b82f6";
       break;
     case "friend_accepted":
-      message = `${item.sender.username} accepted your friend request`;
+      action = "accepted your follow request";
       iconName = "check-circle";
       iconColor = "#10b981";
       break;
     case "like":
-      message = `${item.sender.username} liked your post`;
+      action = "liked your post";
       iconName = "heart";
       iconColor = "#ef4444";
       break;
     case "comment":
-      message = `${item.sender.username} commented on your post`;
+      action = "commented on your post";
       iconName = "comment";
       iconColor = "#f59e0b";
       break;
     case "mention":
-      message = `${item.sender.username} mentioned you in a post`;
+      action = "mentioned you in a post";
       iconName = "at";
       iconColor = "#8b5cf6";
       break;
+    case "follow_back":
+      action = "is following you";
+      iconName = "user-plus";
+      iconColor = "#3b82f6";
+      break;
     default:
-      message = "New notification";
+      action = "sent you a notification";
   }
 
   return (
@@ -80,48 +177,61 @@ const NotificationItem = ({ item, index }) => {
         opacity,
       }}
     >
-      <View className="p-5 border-b border-gray-100 bg-white">
-        <View className="flex-row items-center space-x-4">
-          {item.sender.avatar_url ? (
-            <Image
-              source={{ uri: item.sender.avatar_url }}
-              className="w-14 h-14 rounded-full border-2 border-white shadow-sm"
-            />
-          ) : (
-            <View className="w-14 h-14 rounded-full bg-gray-100 justify-center items-center border-2 border-white shadow-sm">
-              <FontAwesome name="user" size={28} color="#6b7280" />
+      <Pressable onPress={handlePress}>
+        <View className="p-5 border-b bg-white border border-gray-200">
+          <View className="flex-row items-center space-x-4">
+            {item.sender.avatar_url ? (
+              <Image
+                source={{ uri: item.sender.avatar_url }}
+                className="w-14 h-14 rounded-full border-2 border-white shadow-sm"
+              />
+            ) : (
+              <View className="w-14 h-14 rounded-full bg-gray-100 justify-center items-center border-2 border-white shadow-sm">
+                <FontAwesome name="user" size={28} color="#6b7280" />
+              </View>
+            )}
+            
+            <View className="flex-1">
+              <Text className="text-base font-semibold text-gray-800">
+                {item.sender.username}
+              </Text>
+              <View className="flex-row items-center space-x-2">
+                <FontAwesome name={iconName} size={16} color={iconColor} />
+                <Text className="text-sm text-gray-600">{action}</Text>
+              </View>
+              <Text className="text-xs text-gray-400 mt-1.5">
+                {new Date(item.created_at).toLocaleString()}
+              </Text>
             </View>
-          )}
-          
-          <View className="flex-1">
-            <View className="flex-row items-center space-x-2">
-              <FontAwesome name={iconName} size={16} color={iconColor} />
-              <Text className="text-base font-semibold text-gray-800">{message}</Text>
-            </View>
-            <Text className="text-xs text-gray-400 mt-1.5">
-              {new Date(item.created_at).toLocaleString()}
-            </Text>
+
+            {item.type === "follow_request" && (
+              <View className="flex-row gap-2">
+                <Pressable
+                  className="bg-green-500 px-4 py-2 rounded-lg active:bg-green-600 shadow-sm"
+                  onPress={() => handleAcceptFollowRequest(item.id, item.sender.id)}
+                >
+                  <Text className="text-white text-sm font-medium">Accept</Text>
+                </Pressable>
+                <Pressable
+                  className="bg-red-500 px-4 py-2 rounded-lg active:bg-red-600 shadow-sm"
+                  onPress={() => onReject(item.id, item.sender.id)}
+                >
+                  <Text className="text-white text-sm font-medium">Reject</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {item.type === "follow_back" && (
+              <Pressable
+                className="bg-blue-500 px-4 py-2 rounded-lg active:bg-blue-600 shadow-sm"
+                onPress={() => handleFollowBack(item.sender.id)}
+              >
+                <Text className="text-white text-sm font-medium">Follow Back</Text>
+              </Pressable>
+            )}
           </View>
-
-          {item.type === "follow_request" && (
-            <View className="flex-row space-x-2">
-              <Pressable
-                className="bg-green-500 px-4 py-2 rounded-lg active:bg-green-600 shadow-sm"
-                onPress={() => handleAcceptFollowRequest(item.id, item.sender.id)}
-              >
-                <Text className="text-white text-sm font-medium">Accept</Text>
-              </Pressable>
-
-              <Pressable
-                className="bg-red-500 px-4 py-2 rounded-lg active:bg-red-600 shadow-sm"
-                onPress={() => handleRejectFollowRequest(item.id, item.sender.id)}
-              >
-                <Text className="text-white text-sm font-medium">Reject</Text>
-              </Pressable>
-            </View>
-          )}
         </View>
-      </View>
+      </Pressable>
     </Animated.View>
   );
 };
@@ -134,6 +244,28 @@ export default function NotificationScreen() {
   const navigation = useNavigation();
   const fadeAnim = useRef(new Animated.Value(0)).current; // For fade-in effect
   const scaleAnim = useRef(new Animated.Value(0.95)).current; // For scale effect
+
+  const handleRejectFollowRequest = async (notificationId: string, senderId: string) => {
+    try {
+      // Update follow request status
+      await supabase
+        .from("follow_requests")
+        .update({ status: "Rejected" })
+        .eq("requester_id", senderId)
+        .eq("target_id", user.id);
+
+      // Update the notification to reflect rejection
+      await supabase
+        .from("notifications")
+        .update({ type: "follow_request_rejected" })
+        .eq("id", notificationId);
+
+      // Refresh notifications
+      fetchNotifications();
+    } catch (error) {
+      console.error("Error rejecting follow request:", error);
+    }
+  };
 
   const fetchNotifications = async () => {
     try {
@@ -179,65 +311,6 @@ export default function NotificationScreen() {
     return data && data.length > 0; // Return true if they are friends
   };
 
-  const handleAcceptFollowRequest = async (notificationId: string, senderId: string) => {
-    try {
-      // Check if already friends
-      const areFriends = await checkIfFriends(senderId);
-      if (areFriends) {
-        ToastAndroid.show('You are already friends with this user.', ToastAndroid.SHORT);
-        return;
-      }
-
-      // Update follow request status
-      await supabase
-        .from("follow_requests")
-        .update({ status: "Accepted" })
-        .eq("requester_id", senderId)
-        .eq("target_id", user.id);
-
-      // Add both users as friends
-      await supabase
-        .from("friends")
-        .insert([
-          { user_id: user.id, friend_id: senderId, created_at: new Date().toISOString() },
-          { user_id: senderId, friend_id: user.id, created_at: new Date().toISOString() }
-        ]);
-
-      // Update the notification to reflect acceptance
-      await supabase
-        .from("notifications")
-        .update({ type: "friend_accepted" }) // Change type to reflect the action
-        .eq("id", notificationId);
-
-      // Refresh notifications
-      fetchNotifications();
-    } catch (error) {
-      console.error("Error accepting follow request:", error);
-    }
-  };
-
-  const handleRejectFollowRequest = async (notificationId: string, senderId: string) => {
-    try {
-      // Update follow request status
-      await supabase
-        .from("follow_requests")
-        .update({ status: "Rejected" })
-        .eq("requester_id", senderId)
-        .eq("target_id", user.id);
-
-      // Update the notification to reflect rejection
-      await supabase
-        .from("notifications")
-        .update({ type: "follow_request_rejected" }) // Change type to reflect the action
-        .eq("id", notificationId);
-
-      // Refresh notifications
-      fetchNotifications();
-    } catch (error) {
-      console.error("Error rejecting follow request:", error);
-    }
-  };
-
   useEffect(() => {
     fetchNotifications();
   }, [filter]);
@@ -259,7 +332,14 @@ export default function NotificationScreen() {
   }, []);
 
   const renderNotification = ({ item, index }) => {
-    return <NotificationItem item={item} index={index} />;
+    return (
+      <NotificationItem 
+        item={item} 
+        index={index}
+        onReject={handleRejectFollowRequest}
+        fetchNotifications={fetchNotifications}
+      />
+    );
   };
 
   return (
