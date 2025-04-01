@@ -21,11 +21,15 @@ const EditProfileScreen = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
-    name: '',
-    bio: '',
-    website: '',
     email: '',
     phone: '',
+    avatar_url: '',
+    bio: '',
+    website: '',
+    gender: '',
+    date_of_birth: '',
+    is_private: false,
+    verified: false
   });
 
   useEffect(() => {
@@ -36,7 +40,7 @@ const EditProfileScreen = () => {
     try {
       setIsLoading(true);
       const { data, error } = await supabase
-        .from('profiles')
+        .from('users')
         .select('*')
         .eq('id', user.id)
         .single();
@@ -45,11 +49,15 @@ const EditProfileScreen = () => {
 
       setFormData({
         username: data.username || '',
-        name: data.full_name || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        avatar_url: data.avatar_url || '',
         bio: data.bio || '',
         website: data.website || '',
-        email: user?.email || '',
-        phone: data.phone || '',
+        gender: data.gender || '',
+        date_of_birth: data.date_of_birth || '',
+        is_private: data.is_private || false,
+        verified: data.verified || false
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load profile');
@@ -71,7 +79,7 @@ const EditProfileScreen = () => {
 
       // Check if username is unique
       const { data: existingUser, error: checkError } = await supabase
-        .from('profiles')
+        .from('users')
         .select('id')
         .eq('username', formData.username)
         .neq('id', user.id)
@@ -83,13 +91,16 @@ const EditProfileScreen = () => {
       }
 
       const { error } = await supabase
-        .from('profiles')
+        .from('users')
         .update({
           username: formData.username,
-          full_name: formData.name,
+          phone: formData.phone,
+          avatar_url: formData.avatar_url,
           bio: formData.bio,
           website: formData.website,
-          phone: formData.phone,
+          gender: formData.gender,
+          date_of_birth: formData.date_of_birth,
+          is_private: formData.is_private,
           updated_at: new Date(),
         })
         .eq('id', user.id);
@@ -140,26 +151,6 @@ const EditProfileScreen = () => {
       >
         <ScrollView className="flex-1">
           <View className="p-4 space-y-4">
-            {/* Name Input */}
-            <CustomTextInput
-              label="Name"
-              value={formData.name}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
-              placeholder="Your full name"
-              autoCapitalize="words"
-            />
-
-            {/* Username Input */}
-            <CustomTextInput
-              label="Username"
-              value={formData.username}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, username: text }))}
-              placeholder="Username"
-              autoCapitalize="none"
-              autoCorrect={false}
-              required
-            />
-
             {/* Bio Input */}
             <View>
               <Text className="text-sm text-gray-500 mb-1 ml-1">Bio</Text>
@@ -185,25 +176,21 @@ const EditProfileScreen = () => {
               keyboardType="url"
             />
 
-            <View className="h-px bg-gray-200 my-4" />
-
-            <Text className="text-lg font-semibold mb-4">Private Information</Text>
-
-            {/* Email Input */}
+            {/* Gender Input */}
             <CustomTextInput
-              label="Email"
-              value={formData.email}
-              editable={false}
-              className="bg-gray-100"
+              label="Gender"
+              value={formData.gender}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, gender: text }))}
+              placeholder="Your gender"
             />
 
-            {/* Phone Input */}
+            {/* Date of Birth Input */}
             <CustomTextInput
-              label="Phone"
-              value={formData.phone}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text }))}
-              placeholder="Your phone number"
-              keyboardType="phone-pad"
+              label="Date of Birth"
+              value={formData.date_of_birth}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, date_of_birth: text }))}
+              placeholder="YYYY-MM-DD"
+              keyboardType="numbers-and-punctuation"
             />
           </View>
         </ScrollView>

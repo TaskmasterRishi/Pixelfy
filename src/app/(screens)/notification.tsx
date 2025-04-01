@@ -143,7 +143,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
       iconColor = "#3b82f6";
       break;
     case "friend_accepted":
-      action = "accepted your follow request";
+      action = "You accepted the follow request";
       iconName = "check-circle";
       iconColor = "#10b981";
       break;
@@ -292,7 +292,21 @@ export default function NotificationScreen() {
       const { data, error } = await query;
 
       if (!error) {
-        setNotifications(data);
+        // Debugging: Log the received notifications with timestamps
+        console.log("Received notifications:", data.map(n => ({
+          id: n.id,
+          created_at: n.created_at,
+          type: n.type
+        })));
+
+        // Ensure the data is sorted correctly
+        const sortedData = data.sort((a, b) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+
+        setNotifications(sortedData);
+      } else {
+        console.error("Supabase error:", error);
       }
     } catch (error) {
       console.error("Error fetching notifications:", error);
