@@ -1,12 +1,12 @@
 // src/app/(auth)/signup.tsx
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { signUp } from '~/src/services/authService'; // Import the signUp service
-import Button from '~/src/Components/Button';
-import { useAuth } from '~/src/providers/AuthProvider';
+import { signUp } from '~/services/authService'; // Import the signUp service
+import Button from '~/Components/Button';
+import { useAuth } from '~/providers/AuthProvider';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import '~/global.css';
+import '~/../global.css';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');

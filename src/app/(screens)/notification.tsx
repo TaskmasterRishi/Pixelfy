@@ -41,10 +41,11 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
   const opacity = useRef(new Animated.Value(0)).current;
 
   const handlePress = () => {
-    router.push({
-      pathname: '/viewProfile',
-      params: { userId: item.sender.id }
-    });
+    // Remove this navigation since the file doesn't exist
+    // router.push({
+    //   pathname: '/viewProfile',
+    //   params: { userId: item.sender.id }
+    // });
   };
 
   const handleAcceptFollowRequest = async (notificationId: string, senderId: string) => {

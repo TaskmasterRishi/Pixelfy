@@ -12,14 +12,14 @@ import {
   RefreshControl
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { useAuth } from '~/src/providers/AuthProvider';
-import { supabase } from '~/src/lib/supabase';
-import { uploadAvatar, deleteImage } from '~/src/lib/cloudinary';
+import { useAuth } from '~/providers/AuthProvider';
+import { supabase } from '~/lib/supabase';
+import { uploadAvatar, deleteImage } from '~/lib/cloudinary';
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import Feather from '@expo/vector-icons/Feather';
 import { router } from 'expo-router';
 import * as FileSystem from 'expo-file-system';
-import ViewImage from '~/src/Components/viewImage';
+import ViewImage from '~/Components/viewImage';
 
 // Define the Post type
 type Post = {

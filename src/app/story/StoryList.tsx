@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { View, FlatList, Image, TouchableOpacity, ActivityIndicator, Text } from "react-native";
 import { useRouter } from "expo-router";
-import { supabase } from "~/src/lib/supabase";
-import { useAuth } from "~/src/providers/AuthProvider";
+import { supabase } from "~/lib/supabase";
+import { useAuth } from "~/providers/AuthProvider";
 
 interface Story {
   id: string;

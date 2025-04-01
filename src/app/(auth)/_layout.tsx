@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router'; // Import useRouter hook
-import { useAuth } from '~/src/providers/AuthProvider';
+import { useAuth } from '~/providers/AuthProvider';
 import { Stack } from 'expo-router';
 
 export default function AuthLayout() {

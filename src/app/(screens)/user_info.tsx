@@ -13,14 +13,14 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '~/src/lib/supabase';
-import { countryCodes } from '~/src/data/countryCodes';
+import { supabase } from '~/lib/supabase';
+import { countryCodes } from '~/data/countryCodes';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Font from 'expo-font';
 import { useNavigation } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { useRouter } from 'expo-router';
-import { uploadAvatar } from '~/src/lib/cloudinary';
+import { uploadAvatar } from '~/lib/cloudinary';
 
 export default function UserInfo() {
   const navigation = useNavigation();
@@ -50,7 +50,7 @@ export default function UserInfo() {
   useEffect(() => {
     async function loadFont() {
       await Font.loadAsync({
-        'NicolassFont': require('~/assets/fonts/nicolassfonts-onrydisplay-extrabold.otf'),
+        'NicolassFont': require('~/../assets/fonts/nicolassfonts-onrydisplay-extrabold.otf'),
       });
       setFontLoaded(true);
     }

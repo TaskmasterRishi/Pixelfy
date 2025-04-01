@@ -1,7 +1,7 @@
 // src/providers/AuthProvider.tsx
 import React, { useState, createContext, useContext, useEffect } from 'react';
 import { ActivityIndicator } from 'react-native';
-import { supabase } from '~/src/lib/supabase';
+import { supabase } from '~/lib/supabase';
 import { Session, User } from '@supabase/supabase-js';
 
 type AuthContextType = {

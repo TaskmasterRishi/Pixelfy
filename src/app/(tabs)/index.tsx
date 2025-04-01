@@ -12,13 +12,13 @@ import {
   NativeSyntheticEvent,
   Easing,
 } from "react-native";
-import { supabase } from "~/src/lib/supabase";
+import { supabase } from "~/lib/supabase";
 import { useFocusEffect, useRouter } from "expo-router";
-import StoryList from "~/src/app/story/StoryList";
-import PostListItem from "~/src/Components/PostListItem";
+import StoryList from "~/app/story/StoryList";
+import PostListItem from "~/Components/PostListItem";
 import { useFonts } from "expo-font";
 import Ionicons from "react-native-vector-icons/Ionicons";
-import { useAuth } from "~/src/providers/AuthProvider";
+import { useAuth } from "~/providers/AuthProvider";
 
 const PAGE_SIZE = 5;
 
@@ -38,7 +38,7 @@ export default function FeedScreen() {
   const ringAnim = useRef(new Animated.Value(0)).current;
 
   const [fontsLoaded] = useFonts({
-    "OnryDisplay-Bold": require("~/assets/fonts/nicolassfonts-onrydisplay-extrabold.otf"),
+    "OnryDisplay-Bold": require("~/../assets/fonts/nicolassfonts-onrydisplay-extrabold.otf"),
   });
 
   const fetchPosts = async (reset = false) => {

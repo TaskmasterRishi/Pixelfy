@@ -5,7 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import Animated, { useAnimatedGestureHandler, useSharedValue, withSpring } from 'react-native-reanimated';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '~/src/providers/AuthProvider';
+import { useAuth } from '~/providers/AuthProvider';
 import { Alert } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';

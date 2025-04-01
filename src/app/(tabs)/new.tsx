@@ -4,11 +4,11 @@ import {
 } from "react-native";
 import { useState, useEffect, useCallback } from "react";
 import * as ImagePicker from "expo-image-picker";
-import { supabase } from "~/src/lib/supabase";
-import { useAuth } from "~/src/providers/AuthProvider";
+import { supabase } from "~/lib/supabase";
+import { useAuth } from "~/providers/AuthProvider";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { uploadImage } from "~/src/lib/cloudinary";
+import { uploadImage } from "~/lib/cloudinary";
 import * as ImageManipulator from "expo-image-manipulator";
 
 const { width, height } = Dimensions.get("window");

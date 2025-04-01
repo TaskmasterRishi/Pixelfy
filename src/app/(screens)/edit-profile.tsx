@@ -10,10 +10,10 @@ import {
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
-import { useAuth } from '~/src/providers/AuthProvider';
-import { supabase } from '~/src/lib/supabase';
+import { useAuth } from '~/providers/AuthProvider';
+import { supabase } from '~/lib/supabase';
 import { router, Stack } from 'expo-router';
-import CustomTextInput from '~/src/Components/CustomTextInput';
+import CustomTextInput from '~/Components/CustomTextInput';
 
 const EditProfileScreen = () => {
   const { user } = useAuth();

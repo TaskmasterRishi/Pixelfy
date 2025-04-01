@@ -1,6 +1,6 @@
 import { Tabs } from "expo-router";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { useAuth } from "~/src/providers/AuthProvider";
+import { useAuth } from "~/providers/AuthProvider";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { memo } from 'react';
 import Animated, {

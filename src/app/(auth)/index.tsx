@@ -1,9 +1,9 @@
 // src/app/(auth)/index.tsx
 import React, { useState } from 'react';
 import { View, Text, ActivityIndicator, Alert, TouchableOpacity, TextInput } from 'react-native';
-import { signIn, signInWithGoogle } from '~/src/services/authService'; // Import the service functions
-import Button from '~/src/Components/Button';
-import { useAuth } from '~/src/providers/AuthProvider';
+import { signIn, signInWithGoogle } from '~/services/authService'; // Import the service functions
+import Button from '~/Components/Button';
+import { useAuth } from '~/providers/AuthProvider';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
