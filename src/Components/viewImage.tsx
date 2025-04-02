@@ -345,12 +345,15 @@ const ViewImage: React.FC<ViewImageProps> = ({
                   </View>
                 </View>
                 
-                <TouchableOpacity 
-                  onPress={() => setShowOptions(true)}
-                  className="p-2"
-                >
-                  <Feather name="more-horizontal" size={24} color="black" />
-                </TouchableOpacity>
+                {/* Only show 3-dot menu if the current user is the post owner */}
+                {postData?.username === currentUsername && (
+                  <TouchableOpacity 
+                    onPress={() => setShowOptions(true)}
+                    className="p-2"
+                  >
+                    <Feather name="more-horizontal" size={24} color="black" />
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* Image Container */}

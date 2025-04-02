@@ -177,7 +177,7 @@ const ViewProfile = () => {
 
   return (
     <ScrollView 
-      className="flex-1 bg-white"
+      className="flex-1 bg-white pt-10"
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
@@ -230,15 +230,6 @@ const ViewProfile = () => {
                   <Text className="text-sm mt-1">{profile.bio}</Text>
                 )}
               </View>
-
-              {/* Floating Action Button */}
-              <TouchableOpacity 
-                onPress={() => console.log('Add button pressed')}
-                className="absolute bottom-0 right-0 bg-blue-500 rounded-full p-2"
-                style={{ marginBottom: 10, marginRight: 10 }}
-              >
-                <FontAwesome name="plus" size={20} color="white" />
-              </TouchableOpacity>
             </View>
 
             {/* Stats Section */}
@@ -289,12 +280,6 @@ const ViewProfile = () => {
                 onPress={() => console.log('Message button pressed')}
               >
                 <Text className="text-center text-gray-800 font-semibold">Message</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                className="flex-1 bg-gray-200 py-2 rounded-lg"
-                onPress={() => console.log('Share button pressed')}
-              >
-                <Text className="text-center text-gray-800 font-semibold">Share</Text>
               </TouchableOpacity>
             </View>
 

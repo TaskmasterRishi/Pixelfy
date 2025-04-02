@@ -509,6 +509,7 @@ const ProfileScreen = () => {
         caption={selectedPost?.caption}
         likesCount={selectedPost?.likesCount}
         initialComments={[]}
+        style={{ width: '100%', margin: 0 }}
       />
 
       {/* Options Modal */}
