@@ -9,18 +9,17 @@ import {
   Alert, 
   ScrollView,
   useWindowDimensions,
-  RefreshControl
+  RefreshControl,
+  Share
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import { useAuth } from '~/providers/AuthProvider';
-import { supabase } from '~/lib/supabase';
-import { uploadAvatar, deleteImage } from '~/lib/cloudinary';
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import Feather from '@expo/vector-icons/Feather';
-import { router } from 'expo-router';
-import * as FileSystem from 'expo-file-system';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { router, useLocalSearchParams } from 'expo-router';
 import ViewImage from '~/Components/viewImage';
 import StoryViewer from '~/app/story/StoryViewer';
+import { useAuth } from '~/providers/AuthProvider';
+import { supabase } from '~/lib/supabase';
 
 // Define the Post type
 type Post = {
@@ -37,6 +36,7 @@ type Post = {
 
 const ProfileScreen = () => {
   const { user } = useAuth();
+  const { refresh } = useLocalSearchParams();
   const [profile, setProfile] = useState<any>(null);
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
@@ -91,6 +91,12 @@ const ProfileScreen = () => {
       fetchStories();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (refresh === 'true') {
+      fetchProfile();
+    }
+  }, [refresh]);
 
   const fetchProfile = async () => {
     setIsLoading(true);
@@ -178,13 +184,17 @@ const ProfileScreen = () => {
     }
   };
 
-  const handleSignOut = async () => {
+  const handleShareProfile = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      // Debugging: Log the username and share message
+      console.log('Username:', username);
+      const shareMessage = `Check out my profile on Pixelfy: https://pixelfy.com/profile/${username}`;
+      console.log('Share Message:', shareMessage); // Log the share message
+      await Share.share({
+        message: shareMessage,
+      });
     } catch (error) {
-      console.error('Error signing out:', error);
-      Alert.alert('Error', 'Failed to sign out');
+      console.error('Error sharing profile:', error);
     }
   };
 
@@ -286,190 +296,168 @@ const ProfileScreen = () => {
 
   return (
     <>
+      <View className="flex-row items-center justify-between px-4 py-2 border-b border-gray-200 bg-white">
+        <Text className="text-xl font-bold">{username || 'Username'}</Text>
+        <View className="flex-row items-center space-x-4">
+          <TouchableOpacity 
+            onPress={() => router.push('/(tabs)/new')}
+            className="active:opacity-50"
+          >
+            <Feather name="plus-square" size={25} color="black" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => {/* Add menu handler */}}
+            className="active:opacity-50"
+          >
+            <Ionicons name="menu" size={28} color="black" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
       <ScrollView 
-        className="flex-1 bg-white" 
+        className="flex-1 bg-gray-50" 
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-        onScroll={({ nativeEvent }) => {
-          if (isCloseToBottom(nativeEvent)) {
-            loadMorePosts();
-          }
-        }}
-        scrollEventThrottle={400}
       >
-        <ViewImage
-          visible={!!selectedPost}
-          imageUrl={selectedPost?.mediaUrl || ''}
-          postId={selectedPost?.id}
-          onClose={() => setSelectedPost(null)}
-          username={selectedPost?.username}
-          avatarUrl={selectedPost?.avatarUrl}
-          timestamp={selectedPost?.timestamp}
-          caption={selectedPost?.caption}
-          likesCount={selectedPost?.likesCount}
-          initialComments={[]}
-        />
-        
-        <View className="px-4 py-6">
-          {profile && (
-            <>
-              {/* Profile Header */}
-              <View className="flex-row items-center justify-between mb-6">
-                <View className="flex-1">
-                  <Text className="text-2xl font-bold text-gray-900">{username || 'Username'}</Text>
-                  <Text className="text-gray-500">{user?.email}</Text>
+        <View className="px-4 py-6 bg-white rounded-lg shadow-md mb-4">
+          <View className="flex-row mb-4">
+            <TouchableOpacity 
+              onPress={handleAvatarPress}
+              disabled={stories.length === 0}
+              className="mr-4"
+            >
+              {profile.avatar_url ? (
+                <Image
+                  source={{ uri: profile.avatar_url }}
+                  className={`w-24 h-24 rounded-full border-2 ${
+                    stories.length > 0 ? 'border-blue-500' : 'border-gray-200'
+                  }`}
+                />
+              ) : (
+                <View className="w-24 h-24 rounded-full bg-gray-100 items-center justify-center border-2 border-gray-200">
+                  <FontAwesome name="user" size={40} color="#9ca3af" />
                 </View>
-              </View>
-
-              {/* Avatar Section */}
-              <View className="items-center mb-6">
-                <View className="relative">
-                  <TouchableOpacity 
-                    onPress={handleAvatarPress}
-                    disabled={stories.length === 0}
-                  >
-                    {profile.avatar_url ? (
-                      <Image
-                        source={{ uri: profile.avatar_url }}
-                        className={`w-24 h-24 rounded-full border-2 ${
-                          stories.length > 0 ? 'border-blue-500' : 'border-gray-200'
-                        }`}
-                      />
-                    ) : (
-                      <View className="w-24 h-24 rounded-full bg-gray-100 items-center justify-center border-2 border-gray-200">
-                        <FontAwesome name="user" size={40} color="#9ca3af" />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    onPress={() => router.push('/(tabs)/new')}
-                    className="absolute bottom-0 right-0 bg-blue-500 rounded-full p-2 border-2 border-white"
-                  >
-                    <Feather name="plus" size={16} color="white" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Stats Section */}
-              <View className="flex-row justify-around mb-6">
-                <View className="items-center">
-                  <Text className="text-xl font-bold text-gray-900">{postsCount}</Text>
-                  <Text className="text-gray-500">Posts</Text>
-                </View>
-                <TouchableOpacity className="items-center">
-                  <Text className="text-xl font-bold text-gray-900">{followersCount}</Text>
-                  <Text className="text-gray-500">Followers</Text>
-                </TouchableOpacity>
-                <TouchableOpacity className="items-center">
-                  <Text className="text-xl font-bold text-gray-900">{followingCount}</Text>
-                  <Text className="text-gray-500">Following</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Bio */}
-              {profile?.full_name && (
-                <Text className="text-gray-900 px-4 font-bold">{profile.full_name}</Text>
               )}
+            </TouchableOpacity>
 
+            <View className="flex-1 justify-center">
+              <Text className="text-lg font-bold">{username}</Text>
+              {profile.full_name && (
+                <Text className="text-sm font-semibold">{profile.full_name}</Text>
+              )}
               {bio && (
-                <Text className="text-gray-900 mb-6 px-4">{bio}</Text>
+                <Text className="text-sm mt-1">{bio}</Text>
               )}
+            </View>
+          </View>
 
-              {/* Action Buttons */}
-              <View className="flex-row gap-2 mb-6">
-                <TouchableOpacity 
-                  onPress={() => router.push('/(screens)/edit-profile')}
-                  className="flex-1 py-2 rounded-lg bg-gray-100"
-                >
-                  <Text className="text-center font-semibold">Edit Profile</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  onPress={handleSignOut}
-                  className="flex-1 py-2 rounded-lg bg-gray-100"
-                >
-                  <Text className="text-center font-semibold">Sign Out</Text>
-                </TouchableOpacity>
-              </View>
+          <View className="flex-row justify-around mb-4">
+            <View className="items-center">
+              <Text className="text-lg font-bold">{postsCount}</Text>
+              <Text className="text-sm text-gray-500">Posts</Text>
+            </View>
+            <View className="items-center">
+              <Text className="text-lg font-bold">{followersCount}</Text>
+              <Text className="text-sm text-gray-500">Followers</Text>
+            </View>
+            <View className="items-center">
+              <Text className="text-lg font-bold">{followingCount}</Text>
+              <Text className="text-sm text-gray-500">Following</Text>
+            </View>
+          </View>
 
-              {/* Grid Toggle */}
-              <View className="flex-row border-t border-gray-200">
-                <TouchableOpacity 
-                  onPress={() => setActiveTab('posts')}
-                  className={`flex-1 p-3 items-center ${
-                    activeTab === 'posts' ? 'border-b-2 border-black' : ''
-                  }`}
-                >
-                  <FontAwesome 
-                    name="th" 
-                    size={24} 
-                    color={activeTab === 'posts' ? 'black' : 'gray'} 
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  onPress={() => setActiveTab('saved')}
-                  className={`flex-1 p-3 items-center ${
-                    activeTab === 'saved' ? 'border-b-2 border-black' : ''
-                  }`}
-                >
-                  <FontAwesome 
-                    name="bookmark-o" 
-                    size={24} 
-                    color={activeTab === 'saved' ? 'black' : 'gray'} 
-                  />
-                </TouchableOpacity>
-              </View>
-
-              {/* Posts Grid */}
-              {activeTab === 'posts' && (
-                <View className="flex-row flex-wrap mt-5" style={{ width: '100%' }}>
-                  {posts.map((post) => (
-                    <TouchableOpacity 
-                      key={post.id} 
-                      className="w-[48%] mb-2 mx-[1%]"
-                      onPress={() => handlePostPress(post)}
-                    >
-                      <View className="aspect-square rounded-lg shadow-sm bg-gray-100 overflow-hidden">
-                        <Image
-                          source={{ uri: post.media_url }}
-                          className="w-full h-full"
-                          style={{ resizeMode: 'cover' }}
-                        />
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-
-              {/* Empty State */}
-              {posts.length === 0 && activeTab === 'posts' && (
-                <View className="items-center justify-center py-12">
-                  <FontAwesome name="camera" size={48} color="#9ca3af" />
-                  <Text className="text-gray-400 mt-4 text-center">
-                    No Posts Yet
-                  </Text>
-                  <TouchableOpacity 
-                    onPress={() => router.push('/(tabs)/new')}
-                    className="mt-4 bg-blue-500 px-6 py-3 rounded-full"
-                  >
-                    <Text className="text-white font-semibold">Share Your First Post</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Saved Posts Empty State */}
-              {activeTab === 'saved' && (
-                <View className="items-center justify-center py-12">
-                  <FontAwesome name="bookmark" size={48} color="#9ca3af" />
-                  <Text className="text-gray-400 mt-4 text-center">
-                    No Saved Posts
-                  </Text>
-                </View>
-              )}
-            </>
-          )}
+          <View className="flex-row gap-2 mb-6">
+            <TouchableOpacity 
+              onPress={() => router.push('/(screens)/edit-profile')}
+              className="flex-1 py-2 rounded-lg bg-blue-500"
+            >
+              <Text className="text-center text-white font-semibold">Edit Profile</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={handleShareProfile}
+              className="flex-1 py-2 rounded-lg bg-green-500"
+            >
+              <Text className="text-center text-white font-semibold">Share Profile</Text>
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* Grid Toggle */}
+        <View className="flex-row border-t border-gray-200">
+          <TouchableOpacity 
+            onPress={() => setActiveTab('posts')}
+            className={`flex-1 p-3 items-center ${
+              activeTab === 'posts' ? 'border-b-2 border-black' : ''
+            }`}
+          >
+            <FontAwesome 
+              name="th" 
+              size={24} 
+              color={activeTab === 'posts' ? 'black' : 'gray'} 
+            />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setActiveTab('saved')}
+            className={`flex-1 p-3 items-center ${
+              activeTab === 'saved' ? 'border-b-2 border-black' : ''
+            }`}
+          >
+            <FontAwesome 
+              name="bookmark-o" 
+              size={24} 
+              color={activeTab === 'saved' ? 'black' : 'gray'} 
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Posts Grid */}
+        {activeTab === 'posts' && (
+          <View className="flex-row flex-wrap mt-5" style={{ width: '100%' }}>
+            {posts.map((post) => (
+              <TouchableOpacity 
+                key={post.id} 
+                className="w-[48%] mb-2 mx-[1%]"
+                onPress={() => handlePostPress(post)}
+              >
+                <View className="aspect-square rounded-lg shadow-sm bg-gray-100 overflow-hidden">
+                  <Image
+                    source={{ uri: post.media_url }}
+                    className="w-full h-full"
+                    style={{ resizeMode: 'cover' }}
+                  />
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Empty State */}
+        {posts.length === 0 && activeTab === 'posts' && (
+          <View className="items-center justify-center py-12">
+            <FontAwesome name="camera" size={48} color="#9ca3af" />
+            <Text className="text-gray-400 mt-4 text-center">
+              No Posts Yet
+            </Text>
+            <TouchableOpacity 
+              onPress={() => router.push('/(tabs)/new')}
+              className="mt-4 bg-blue-500 px-6 py-3 rounded-full"
+            >
+              <Text className="text-white font-semibold">Share Your First Post</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Saved Posts Empty State */}
+        {activeTab === 'saved' && (
+          <View className="items-center justify-center py-12">
+            <FontAwesome name="bookmark" size={48} color="#9ca3af" />
+            <Text className="text-gray-400 mt-4 text-center">
+              No Saved Posts
+            </Text>
+          </View>
+        )}
 
         {/* Add loading indicator at the bottom */}
         {hasMorePosts && (

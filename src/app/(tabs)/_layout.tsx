@@ -142,14 +142,7 @@ export default function TabLayout() {
                     }
                 }}
             >
-                <Tabs.Screen
-                    name="search"
-                    options={{
-                        tabBarIcon: ({ color, focused }) => (
-                            <TabIcon name="search" color={color} focused={focused} />
-                        )
-                    }}
-                />
+
 
                 <Tabs.Screen
                     name="index"
@@ -159,7 +152,14 @@ export default function TabLayout() {
                         )
                     }}
                 />
-
+                <Tabs.Screen
+                    name="search"
+                    options={{
+                        tabBarIcon: ({ color, focused }) => (
+                            <TabIcon name="search" color={color} focused={focused} />
+                        )
+                    }}
+                />
                 <Tabs.Screen
                     name="new"
                     options={{

@@ -58,10 +58,6 @@ export const uploadImage = async (imageUri, folder = "") => {
   }
 };
 
-// ✅ New method to upload avatar to 'avatar' folder
-export const uploadAvatar = async (imageUri) => {
-  return uploadImage(imageUri, "avatar"); // Upload avatar images to 'avatar' folder
-};
 
 export const deleteImage = async (publicId: string) => {
   try {
