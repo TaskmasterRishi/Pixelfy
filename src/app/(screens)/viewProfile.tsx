@@ -177,7 +177,7 @@ const ViewProfile = () => {
 
   return (
     <ScrollView 
-      className="flex-1 bg-white pt-20"
+      className="flex-1 bg-white"
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
@@ -195,57 +195,72 @@ const ViewProfile = () => {
         initialComments={[]}
       />
       
-      <View className="px-4 pb-6">
+      <View className="px-4 py-6 bg-white">
         {profile && (
           <>
             {/* Profile Header */}
-            <View className='px-4'>
-              <Text className="text-3xl font-extrabold text-gray-900">{profile.username}</Text>
-              {profile.full_name && (
-                <Text className="text-gray-600 mt-1 text-lg">{profile.full_name}</Text>
-              )}
+            <View className='flex-row items-center justify-between px-4 py-2 border-b border-gray-200'>
+              <Text className="text-xl font-bold">{profile.username}</Text>
+              <View className="flex-row items-center space-x-4">
+                {/* Removed menu handler */}
+              </View>
             </View>
 
-            {/* Bio */}
-            {profile.bio && (
-              <Text className="text-gray-800 mb-8 px-4 text-lg leading-6">{profile.bio}</Text>
-            )}
-
             {/* Avatar Section */}
-            <View className="items-center mb-8">
-              {profile.avatar_url ? (
-                <Image
-                  source={{ uri: profile.avatar_url }}
-                  className="w-32 h-32 rounded-full border-4 border-white shadow-lg"
-                />
-              ) : (
-                <View className="w-32 h-32 rounded-full bg-gray-100 items-center justify-center border-4 border-white shadow-lg">
-                  <FontAwesome name="user" size={48} color="#9ca3af" />
-                </View>
-              )}
+            <View className="flex-row mb-4 pt-4 relative">
+              <TouchableOpacity 
+                onPress={() => console.log('Avatar pressed')}
+                className="mr-4"
+              >
+                {profile.avatar_url ? (
+                  <Image
+                    source={{ uri: profile.avatar_url }}
+                    className="w-24 h-24 rounded-full border-2 border-gray-200"
+                  />
+                ) : (
+                  <View className="w-24 h-24 rounded-full bg-gray-100 items-center justify-center border-2 border-gray-200">
+                    <FontAwesome name="user" size={40} color="#9ca3af" />
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <View className="flex-1 justify-center">
+                <Text className="text-lg font-bold">{profile.full_name}</Text>
+                {profile.bio && (
+                  <Text className="text-sm mt-1">{profile.bio}</Text>
+                )}
+              </View>
+
+              {/* Floating Action Button */}
+              <TouchableOpacity 
+                onPress={() => console.log('Add button pressed')}
+                className="absolute bottom-0 right-0 bg-blue-500 rounded-full p-2"
+                style={{ marginBottom: 10, marginRight: 10 }}
+              >
+                <FontAwesome name="plus" size={20} color="white" />
+              </TouchableOpacity>
             </View>
 
             {/* Stats Section */}
-            <View className="flex-row justify-around mb-8 bg-white rounded-xl py-4 mx-2 shadow-sm border border-gray-200">
+            <View className="flex-row justify-around mb-4">
               <View className="items-center">
-                <Text className="text-2xl font-bold text-gray-900">{posts.length}</Text>
-                <Text className="text-gray-500 text-sm">Posts</Text>
+                <Text className="text-lg font-bold">{posts.length}</Text>
+                <Text className="text-sm text-gray-500">Posts</Text>
               </View>
-              <TouchableOpacity className="items-center">
-                <Text className="text-2xl font-bold text-gray-900">{followersCount}</Text>
-                <Text className="text-gray-500 text-sm">Followers</Text>
-              </TouchableOpacity>
-              <TouchableOpacity className="items-center">
-                <Text className="text-2xl font-bold text-gray-900">{followingCount}</Text>
-                <Text className="text-gray-500 text-sm">Following</Text>
-              </TouchableOpacity>
+              <View className="items-center">
+                <Text className="text-lg font-bold">{followersCount}</Text>
+                <Text className="text-sm text-gray-500">Followers</Text>
+              </View>
+              <View className="items-center">
+                <Text className="text-lg font-bold">{followingCount}</Text>
+                <Text className="text-sm text-gray-500">Following</Text>
+              </View>
             </View>
 
-
             {/* Action Buttons */}
-            <View className="flex-row gap-3 mb-8 px-4">
+            <View className="flex-row gap-2 mb-6">
               <TouchableOpacity 
-                className={`flex-1 py-3 rounded-lg items-center ${
+                className={`flex-1 py-2 rounded-lg ${
                   followStatus === 'following' 
                     ? 'bg-blue-50 border border-blue-100' 
                     : followStatus === 'requested'
@@ -256,13 +271,9 @@ const ViewProfile = () => {
                 disabled={isFollowUpdating}
               >
                 {isFollowUpdating ? (
-                  <ActivityIndicator size="small" color={
-                    followStatus === 'following' ? '#3b82f6' : 
-                    followStatus === 'requested' ? '#3b82f6' : 
-                    '#ffffff'
-                  } />
+                  <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
-                  <Text className={`font-semibold ${
+                  <Text className={`text-center font-semibold ${
                     followStatus === 'following' ? 'text-blue-600' : 
                     followStatus === 'requested' ? 'text-blue-700' : 
                     'text-white'
@@ -274,28 +285,28 @@ const ViewProfile = () => {
                 )}
               </TouchableOpacity>
               <TouchableOpacity 
-                className="flex-1 bg-gray-200 py-3 rounded-lg items-center"
+                className="flex-1 bg-gray-200 py-2 rounded-lg"
                 onPress={() => console.log('Message button pressed')}
               >
-                <Text className="text-gray-800 font-semibold">Message</Text>
+                <Text className="text-center text-gray-800 font-semibold">Message</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                className="flex-1 bg-gray-200 py-3 rounded-lg items-center"
+                className="flex-1 bg-gray-200 py-2 rounded-lg"
                 onPress={() => console.log('Share button pressed')}
               >
-                <Text className="text-gray-800 font-semibold">Share</Text>
+                <Text className="text-center text-gray-800 font-semibold">Share</Text>
               </TouchableOpacity>
             </View>
 
             {/* Posts Grid */}
-            <View className="flex-row flex-wrap mt-5" style={{ width: '100%' }}>
+            <View className="flex-row flex-wrap mt-5 bg-white" style={{ width: '100%' }}>
               {posts.map((post) => (
                 <TouchableOpacity 
                   key={post.id} 
                   className="w-[48%] mb-3 mx-[1%]"
                   onPress={() => handlePostPress(post)}
                 >
-                  <View className="aspect-square rounded-xl shadow-sm bg-gray-100 overflow-hidden">
+                  <View className="aspect-square rounded-lg bg-gray-100 overflow-hidden">
                     <Image
                       source={{ uri: post.media_url }}
                       className="w-full h-full"
@@ -308,7 +319,7 @@ const ViewProfile = () => {
 
             {/* Empty State */}
             {posts.length === 0 && (
-              <View className="items-center justify-center py-16">
+              <View className="items-center justify-center py-16 bg-white">
                 <View className="bg-gray-50 p-8 rounded-full">
                   <FontAwesome name="camera" size={48} color="#9ca3af" />
                 </View>

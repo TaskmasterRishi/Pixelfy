@@ -10,7 +10,8 @@ import {
   ScrollView,
   useWindowDimensions,
   RefreshControl,
-  Share
+  Share,
+  Pressable
 } from 'react-native';
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import Feather from '@expo/vector-icons/Feather';
@@ -20,6 +21,8 @@ import ViewImage from '~/Components/viewImage';
 import StoryViewer from '~/app/story/StoryViewer';
 import { useAuth } from '~/providers/AuthProvider';
 import { supabase } from '~/lib/supabase';
+import { BlurView } from 'expo-blur';
+import Animated, { useSharedValue, withSpring } from 'react-native-reanimated';
 
 // Define the Post type
 type Post = {
@@ -35,7 +38,7 @@ type Post = {
 };
 
 const ProfileScreen = () => {
-  const { user } = useAuth();
+  const { user, setSession } = useAuth();
   const { refresh } = useLocalSearchParams();
   const [profile, setProfile] = useState<any>(null);
   const [username, setUsername] = useState('');
@@ -64,6 +67,9 @@ const ProfileScreen = () => {
   const [followingCount, setFollowingCount] = useState(0);
   const [stories, setStories] = useState<Story[]>([]);
   const [showStoryViewer, setShowStoryViewer] = useState(false);
+  const [isViewImageVisible, setIsViewImageVisible] = useState(false); // State to control ViewImage visibility
+  const [showOptions, setShowOptions] = useState(false);
+  const optionsPanelY = useSharedValue(500);
 
   useEffect(() => {
     if (user) {
@@ -97,6 +103,14 @@ const ProfileScreen = () => {
       fetchProfile();
     }
   }, [refresh]);
+
+  useEffect(() => {
+    if (showOptions) {
+      optionsPanelY.value = withSpring(0, { damping: 15 });
+    } else {
+      optionsPanelY.value = withSpring(500, { damping: 15 });
+    }
+  }, [showOptions]);
 
   const fetchProfile = async () => {
     setIsLoading(true);
@@ -242,7 +256,6 @@ const ProfileScreen = () => {
   };
 
   const handlePostPress = (post: Post) => {
-    // Create a new object with all required data
     const postData = {
       id: post.id,
       mediaUrl: post.media_url,
@@ -254,8 +267,8 @@ const ProfileScreen = () => {
       comments: []
     };
     
-    // Set the selected post data
     setSelectedPost(postData);
+    setIsViewImageVisible(true); // Open the ViewImage modal
   };
 
   const handleAvatarPress = () => {
@@ -286,6 +299,27 @@ const ProfileScreen = () => {
     }
   };
 
+  const handleLogout = async () => {
+    setShowOptions(false);
+    try {
+      // Clear the session in the auth provider
+      setSession(null);
+      
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Redirect to auth page
+      router.replace('/(auth)/');
+    } catch (error) {
+      console.error('Error logging out:', error);
+      Alert.alert('Error', 'Failed to log out. Please try again.');
+    }
+  };
+
   if (isLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
@@ -298,7 +332,7 @@ const ProfileScreen = () => {
     <>
       <View className="flex-row items-center justify-between px-4 py-2 border-b border-gray-200 bg-white">
         <Text className="text-xl font-bold">{username || 'Username'}</Text>
-        <View className="flex-row items-center space-x-4">
+        <View className="flex-row items-center gap-2">
           <TouchableOpacity 
             onPress={() => router.push('/(tabs)/new')}
             className="active:opacity-50"
@@ -306,7 +340,7 @@ const ProfileScreen = () => {
             <Feather name="plus-square" size={25} color="black" />
           </TouchableOpacity>
           <TouchableOpacity 
-            onPress={() => {/* Add menu handler */}}
+            onPress={() => setShowOptions(true)}
             className="active:opacity-50"
           >
             <Ionicons name="menu" size={28} color="black" />
@@ -315,12 +349,12 @@ const ProfileScreen = () => {
       </View>
 
       <ScrollView 
-        className="flex-1 bg-gray-50" 
+        className="flex-1 bg-white"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <View className="px-4 py-6 bg-white rounded-lg shadow-md mb-4">
+        <View className="px-4 py-6 bg-white rounded-lg mb-4">
           <View className="flex-row mb-4">
             <TouchableOpacity 
               onPress={handleAvatarPress}
@@ -466,6 +500,85 @@ const ProfileScreen = () => {
           </View>
         )}
       </ScrollView>
+
+      {/* ViewImage Modal */}
+      {selectedPost && (
+        <ViewImage
+          visible={!!selectedPost}
+          imageUrl={selectedPost.mediaUrl}
+          onClose={() => setSelectedPost(null)} // Close the modal
+          postId={selectedPost.id}
+          username={selectedPost.username}
+          avatarUrl={selectedPost.avatarUrl}
+          timestamp={selectedPost.timestamp}
+          caption={selectedPost.caption}
+          likesCount={selectedPost.likesCount}
+          initialComments={selectedPost.comments}
+        />
+      )}
+
+      {/* Options Modal */}
+      <View className="absolute inset-0" pointerEvents={showOptions ? 'auto' : 'none'}>
+        <Pressable 
+          className="flex-1"
+          onPress={() => setShowOptions(false)}
+          style={{ 
+            opacity: showOptions ? 1 : 0,
+            backgroundColor: showOptions ? 'rgba(0,0,0,0.5)' : 'transparent'
+          }}
+        />
+        <Animated.View 
+          style={{ 
+            transform: [{ translateY: optionsPanelY }],
+            backgroundColor: 'white',
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0
+          }}
+        >
+          <View className="w-12 h-1 bg-gray-300 rounded-full mx-auto my-3" />
+          
+          <TouchableOpacity 
+            onPress={() => {
+              setShowOptions(false);
+              // Add your action here
+            }}
+            className="flex-row items-center px-6 py-4 border-b border-gray-200"
+          >
+            <Feather name="settings" size={24} color="black" />
+            <Text className="ml-4">Settings</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            onPress={() => {
+              setShowOptions(false);
+              // Add your action here
+            }}
+            className="flex-row items-center px-6 py-4 border-b border-gray-200"
+          >
+            <Feather name="help-circle" size={24} color="black" />
+            <Text className="ml-4">Help</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            onPress={handleLogout}
+            className="flex-row items-center px-6 py-4 border-b border-gray-200"
+          >
+            <Feather name="log-out" size={24} color="red" />
+            <Text className="ml-4 text-red-500">Log Out</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            onPress={() => setShowOptions(false)}
+            className="px-6 py-4 mb-6"
+          >
+            <Text className="text-center text-gray-500">Cancel</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
     </>
   );
 };
