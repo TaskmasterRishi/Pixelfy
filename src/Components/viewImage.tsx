@@ -523,4 +523,4 @@ const ViewImage: React.FC<ViewImageProps> = ({
   );
 };
 
-export default ViewImage;
+export default React.memo(ViewImage);

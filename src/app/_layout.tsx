@@ -31,6 +31,7 @@ export default function RootLayout() {
                         }} 
                     />
                     <Stack.Screen name="notification" />
+                    <Stack.Screen name="help" />
                 </Stack>
             </AuthProvider>
         </SafeAreaProvider>

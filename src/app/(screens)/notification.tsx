@@ -40,7 +40,24 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
   const translateY = useRef(new Animated.Value(50)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
+  const markAsSeen = async (notificationId: string) => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ seen: true })
+        .eq('id', notificationId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error marking notification as seen:', error);
+    }
+  };
+
   const handlePress = () => {
+    // Mark notification as seen when pressed
+    if (!item.seen) {
+      markAsSeen(item.id);
+    }
     // Remove this navigation since the file doesn't exist
     // router.push({
     //   pathname: '/viewProfile',
@@ -179,8 +196,13 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
       }}
     >
       <Pressable onPress={handlePress}>
-        <View className="p-5 border-b bg-white border border-gray-200">
+        <View className={`p-5 border-b bg-white border border-gray-200 ${
+          !item.seen ? 'bg-blue-50' : ''
+        }`}>
           <View className="flex-row items-center space-x-4">
+            {!item.seen && (
+              <View className="absolute top-2 right-2 w-2 h-2 bg-blue-500 rounded-full" />
+            )}
             {item.sender.avatar_url ? (
               <Image
                 source={{ uri: item.sender.avatar_url }}
@@ -292,14 +314,18 @@ export default function NotificationScreen() {
       const { data, error } = await query;
 
       if (!error) {
-        // Debugging: Log the received notifications with timestamps
-        console.log("Received notifications:", data.map(n => ({
-          id: n.id,
-          created_at: n.created_at,
-          type: n.type
-        })));
+        // Mark all fetched notifications as seen
+        const unseenIds = data
+          .filter(n => !n.seen)
+          .map(n => n.id);
 
-        // Ensure the data is sorted correctly
+        if (unseenIds.length > 0) {
+          await supabase
+            .from('notifications')
+            .update({ seen: true })
+            .in('id', unseenIds);
+        }
+
         const sortedData = data.sort((a, b) => 
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );

@@ -137,6 +137,11 @@ export default function FeedScreen() {
 
   const checkUnseenNotifications = async () => {
     try {
+      if (!user) {
+        setHasUnseenNotifications(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('notifications')
         .select('id')
@@ -149,6 +154,7 @@ export default function FeedScreen() {
       }
     } catch (error) {
       console.error('Error checking unseen notifications:', error);
+      setHasUnseenNotifications(false);
     }
   };
 
@@ -164,19 +170,25 @@ export default function FeedScreen() {
           schema: 'public',
           table: 'notifications',
           filter: `user_id=eq.${user.id}`
-        }, () => {
-          checkUnseenNotifications();
+        }, (payload) => {
+          // Only trigger animation if the new notification is unseen
+          if (payload.new && payload.new.seen === false) {
+            checkUnseenNotifications();
+          }
         })
         .subscribe();
 
       return () => {
         supabase.removeChannel(subscription);
       };
+    } else {
+      setHasUnseenNotifications(false);
     }
   }, [user]);
 
+  // Only start animations if user is logged in and has unseen notifications
   useEffect(() => {
-    if (hasUnseenNotifications) {
+    if (user && hasUnseenNotifications) {
       const pulse = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -196,10 +208,10 @@ export default function FeedScreen() {
       pulse.start();
       return () => pulse.stop();
     }
-  }, [hasUnseenNotifications]);
+  }, [hasUnseenNotifications, user]);
 
   useEffect(() => {
-    if (hasUnseenNotifications) {
+    if (user && hasUnseenNotifications) {
       const shake = Animated.loop(
         Animated.sequence([
           Animated.timing(iconAnim, {
@@ -227,10 +239,10 @@ export default function FeedScreen() {
     } else {
       iconAnim.setValue(1);
     }
-  }, [hasUnseenNotifications]);
+  }, [hasUnseenNotifications, user]);
 
   useEffect(() => {
-    if (hasUnseenNotifications) {
+    if (user && hasUnseenNotifications) {
       const ring = Animated.loop(
         Animated.sequence([
           // First swing
@@ -282,7 +294,7 @@ export default function FeedScreen() {
     } else {
       ringAnim.setValue(0); // Reset animation when no unseen notifications
     }
-  }, [hasUnseenNotifications]);
+  }, [hasUnseenNotifications, user]);
 
   const rotateInterpolate = ringAnim.interpolate({
     inputRange: [-1, 0, 1],

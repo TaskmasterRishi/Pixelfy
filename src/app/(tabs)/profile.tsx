@@ -256,19 +256,15 @@ const ProfileScreen = () => {
   };
 
   const handlePostPress = (post: Post) => {
-    const postData = {
+    setSelectedPost({
       id: post.id,
       mediaUrl: post.media_url,
       username: post.user.username,
       avatarUrl: post.user.avatar_url,
       timestamp: post.created_at,
       caption: post.caption,
-      likesCount: post.likes_count,
-      comments: []
-    };
-    
-    setSelectedPost(postData);
-    setIsViewImageVisible(true); // Open the ViewImage modal
+      likesCount: post.likes_count
+    });
   };
 
   const handleAvatarPress = () => {
@@ -502,20 +498,18 @@ const ProfileScreen = () => {
       </ScrollView>
 
       {/* ViewImage Modal */}
-      {selectedPost && (
-        <ViewImage
-          visible={!!selectedPost}
-          imageUrl={selectedPost.mediaUrl}
-          onClose={() => setSelectedPost(null)} // Close the modal
-          postId={selectedPost.id}
-          username={selectedPost.username}
-          avatarUrl={selectedPost.avatarUrl}
-          timestamp={selectedPost.timestamp}
-          caption={selectedPost.caption}
-          likesCount={selectedPost.likesCount}
-          initialComments={selectedPost.comments}
-        />
-      )}
+      <ViewImage
+        visible={!!selectedPost}
+        imageUrl={selectedPost?.mediaUrl || ''}
+        postId={selectedPost?.id}
+        onClose={() => setSelectedPost(null)}
+        username={selectedPost?.username}
+        avatarUrl={selectedPost?.avatarUrl}
+        timestamp={selectedPost?.timestamp}
+        caption={selectedPost?.caption}
+        likesCount={selectedPost?.likesCount}
+        initialComments={[]}
+      />
 
       {/* Options Modal */}
       <View className="absolute inset-0" pointerEvents={showOptions ? 'auto' : 'none'}>
@@ -555,7 +549,7 @@ const ProfileScreen = () => {
           <TouchableOpacity 
             onPress={() => {
               setShowOptions(false);
-              // Add your action here
+              router.push('../(screens)/Help');
             }}
             className="flex-row items-center px-6 py-4 border-b border-gray-200"
           >
