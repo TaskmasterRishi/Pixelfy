@@ -182,9 +182,18 @@ export default function TabLayout() {
                     name="notification"
                     options={{
                         title: 'Notifications',
-                        tabBarIcon: ({ color }) => (
-                            <FontAwesome name="bell" size={24} color={color} />
+                        tabBarIcon: ({ color, focused }) => (
+                            <TabIcon name="bell" color={color} focused={focused} />
                         ),
+                    }}
+                />
+
+                <Tabs.Screen
+                    name="(chat)"
+                    options={{
+                        tabBarIcon: ({ color, focused }) => (
+                            <TabIcon name="comments" color={color} focused={focused} />
+                        )
                     }}
                 />
 
