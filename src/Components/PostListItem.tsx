@@ -15,6 +15,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { handleLike, LikeButton, checkIfLiked } from './LikeButton';
 import { useAuth } from '~/providers/AuthProvider';
+import { supabase } from '~/lib/supabase';
 
 interface User {
   id: string; // UUID
@@ -69,6 +70,8 @@ export default function PostListItem({
 
   const { user } = useAuth();
 
+  const [likeCount, setLikeCount] = useState(0);
+
   const avatarUrl = useMemo(() => {
     return post.user?.avatar_url && !avatarError
       ? `${post.user.avatar_url}?t=${Date.now()}`
@@ -93,6 +96,24 @@ export default function PostListItem({
     fetchLikeStatus();
   }, [post.id, user.id]);
 
+  // Fetch like count when component mounts
+  useEffect(() => {
+    const fetchLikeCount = async () => {
+      const { count, error } = await supabase
+        .from('likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('post_id', post.id);
+
+      if (error) {
+        console.error('Error fetching like count:', error);
+      } else {
+        setLikeCount(count || 0);
+      }
+    };
+
+    fetchLikeCount();
+  }, [post.id]);
+
   const handleLikePress = async () => {
     try {
       const newLikedState = await handleLike({
@@ -101,6 +122,8 @@ export default function PostListItem({
         isLiked: liked,
         onLikeChange: (newState) => {
           setLiked(newState);
+          // Update local like count
+          setLikeCount(prev => newState ? prev + 1 : Math.max(prev - 1, 0));
           onLike?.(post.id);
         },
         userId: user.id
@@ -232,9 +255,12 @@ export default function PostListItem({
           <View className="flex-row items-center gap-4">
             <TouchableOpacity 
               onPress={handleLikePress}
-              className="active:opacity-60"
+              className="active:opacity-60 flex-row items-center gap-2"
             >
               <LikeButton isLiked={liked} />
+              <Text className="text-sm font-semibold text-gray-800">
+                {likeCount} likes
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity 
               onPress={() => onComment?.(post.id)}
@@ -258,7 +284,7 @@ export default function PostListItem({
         {/* Likes & Caption */}
         <View className="mt-2">
           <Text className="font-semibold text-[14px]">
-            {liked ? "You liked this" : `${post.likes_count || 0} likes`}
+            {liked ? "You and " : ""}{likeCount} {likeCount === 1 ? 'like' : 'likes'}
           </Text>
           {post.caption && (
             <Text className="text-[14px] leading-5 mt-1">
