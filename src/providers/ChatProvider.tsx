@@ -7,11 +7,11 @@ import { useAuth } from "./AuthProvider";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { supabase } from "../lib/supabase";
 
-const client = StreamChat.getInstance("cxc6zzq7e93f");
+const client = StreamChat.getInstance(process.env.EXPO_PUBLIC_STREAM_API_KEY);
 
 export default function ChatProvider({ children }: PropsWithChildren) {
   const [isReady, setIsReady] = useState(false);
-  const {user} = useAuth();
+  const { user } = useAuth();
   const [username, setUsername] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
@@ -29,8 +29,9 @@ export default function ChatProvider({ children }: PropsWithChildren) {
         } else {
           setUsername(data.username);
           if (data.avatar_url) {
-            console.log("Fetched avatar_url from Supabase:", data.avatar_url);
-            setAvatarUrl(data.avatar_url);
+            const cloudinaryUrl = `https://res.cloudinary.com/YOUR_CLOUD_NAME/image/upload/${data.avatar_url}`;
+            console.log("Fetched avatar_url from Cloudinary:", cloudinaryUrl);
+            setAvatarUrl(cloudinaryUrl);
           } else {
             console.log("No avatar_url found for the user.");
           }
@@ -42,29 +43,30 @@ export default function ChatProvider({ children }: PropsWithChildren) {
   }, [user]);
 
   useEffect(() => {
-    const connectUser = async () => {
-      if (user && user.id && username) {
-        try {
-          await client.connectUser(
-            {
-              id: user.id,
-              name: username || "Anonymous", 
-              image: avatarUrl || '',
-            },
-            client.devToken(user.id)
-          );
-          setIsReady(true);
-        } catch (error) {
-          console.error("Error connecting user:", error);
-        }
-      } else {
-        console.error("User is not defined or user.id is missing");
+    if (!user || !user.id || !username || !avatarUrl) {
+      console.log("Waiting for user details to be ready...");
+      return;
+    }
+
+    const connect = async () => {
+      console.log("Attempting to connect user:", { user, username, avatarUrl });
+      try {
+        await client.connectUser(
+          {
+            id: user.id,
+            name: username || "Anonymous",
+            image: avatarUrl || '',
+          },
+          client.devToken(user.id)
+        );
+        setIsReady(true);
+        console.log("User connected successfully");
+      } catch (error) {
+        console.error("Error connecting user:", error);
       }
     };
 
-    if (user && user.id && username) {
-      connectUser();
-    }
+    connect();
 
     return () => {
       if (isReady) {
@@ -72,10 +74,10 @@ export default function ChatProvider({ children }: PropsWithChildren) {
       }
       setIsReady(false);
     };
-  }, [user?.id]);
+  }, [user?.id, username, avatarUrl]);
 
-  if(!isReady){
-    return <ActivityIndicator/>
+  if (!isReady) {
+    return <ActivityIndicator />;
   }
 
   return (
