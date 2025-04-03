@@ -42,18 +42,22 @@ export default function ChatScreen() {
 
             <ChannelList 
                 filters={{ members: { $in: [user.id] } }}
-                onSelect={(channel) => router.push(`/chat/channel/${channel.id}`)} 
-                ChannelPreview={(channel) => (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 10 }}>
-                        {userAvatars[channel.members[0].user.id] && (
-                            <Image
-                                source={{ uri: userAvatars[channel.members[0].user.id] }}
-                                style={{ width: 40, height: 40, borderRadius: 20, marginRight: 10 }}
-                            />
-                        )}
-                        <Text>{channel.name}</Text>
-                    </View>
-                )}
+                onSelect={(channel) => router.push(`/(chat)/channel/${channel.cid}`)} 
+                ChannelPreview={(channel) => {
+                    const memberId = channel.members[0].user.id;
+                    const avatarUrl = userAvatars[memberId];
+                    return (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 10 }}>
+                            {avatarUrl && (
+                                <Image
+                                    source={{ uri: avatarUrl }}
+                                    style={{ width: 40, height: 40, borderRadius: 20, marginRight: 10 }}
+                                />
+                            )}
+                            <Text>{channel.name}</Text>
+                        </View>
+                    );
+                }}
             />
         </View>
     );

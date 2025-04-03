@@ -31,11 +31,22 @@ export default function UsersScreen() {
     fetchUsers();
   }, [user]); // Add user as a dependency
 
+  const handlePress = async (user) => {
+    // Implement the logic to handle the press event
+    console.log('User pressed:', user);
+  };
+
   return (
     <FlatList
       data={users}
       contentContainerStyle={{ gap: 5 }}
-      renderItem={({ item }) => <UserListItem user={item} />}
+      renderItem={({ item }) => (
+        <UserListItem 
+          user={item} 
+          isFollowing={false}
+          onPress={() => handlePress(item)}
+        />
+      )}
     />
   );
 }

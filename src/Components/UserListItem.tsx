@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity } from 'react-native';
 import { useChatContext } from 'stream-chat-expo';
-import { useAuth } from '../providers/AuthProvider';
+import { useAuth } from '~/providers/AuthProvider';
 import { router } from 'expo-router';
 
 type UserListItemProps = {
@@ -20,13 +20,39 @@ const UserListItem = ({ user, isFollowing, onPress }: UserListItemProps) => {
   const { user: me } = useAuth();
 
   const handlePress = async () => {
-    // Start a chat with the user
+    console.log("UserListItem pressed:", user.username); // Debugging line
+
+    // Check if the user exists (you may need to implement this check)
+    try {
+      const userExists = await client.queryUsers({ id: user.id });
+      if (userExists.users.length === 0) {
+        console.error("User does not exist:", user.id);
+        return; // Exit if the user does not exist
+      }
+    } catch (error) {
+      console.error("Error checking user existence:", error);
+      return; // Exit if there's an error
+    }
+
+    // Start a chat with the selected user
     const channel = client.channel('messaging', {
       members: [me.id, user.id],
     });
-    await channel.watch();
-    router.replace(`/(home)/channel/${channel.cid}`);
-    onPress(); // Call the original onPress if needed
+
+    try {
+      // Create the channel
+      await channel.create();
+      console.log("Channel created:", channel.cid); // Debugging line
+
+      // Watch the channel to get its state
+      await channel.watch();
+      console.log("Channel watched:", channel.cid); // Debugging line
+
+      // Ensure the routing to the correct channel ID
+      router.replace(`/(chat)/channel/${channel.cid}`); // Ensure cid is correctly used
+    } catch (error) {
+      console.error("Error creating or watching channel:", error); // Log any errors
+    }
   };
 
   return (
@@ -48,8 +74,9 @@ const UserListItem = ({ user, isFollowing, onPress }: UserListItemProps) => {
       <View className="flex-1">
         <Text className="font-semibold">{user.username}</Text>
         {user.full_name && (
-          <Text className="text-sm text-gray-500">{user.full_name}</Text>
+          <Text className="text-sm text-gray-500">{user.full_name}+"hi"</Text>
         )}
+        <Text className="text-sm text-gray-500">Tap to chat</Text>
       </View>
 
       {isFollowing && (
