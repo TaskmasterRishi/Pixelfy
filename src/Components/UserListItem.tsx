@@ -1,5 +1,8 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity } from 'react-native';
+import { useChatContext } from 'stream-chat-expo';
+import { useAuth } from '../providers/AuthProvider';
+import { router } from 'expo-router';
 
 type UserListItemProps = {
   user: {
@@ -13,10 +16,23 @@ type UserListItemProps = {
 };
 
 const UserListItem = ({ user, isFollowing, onPress }: UserListItemProps) => {
+  const { client } = useChatContext();
+  const { user: me } = useAuth();
+
+  const handlePress = async () => {
+    // Start a chat with the user
+    const channel = client.channel('messaging', {
+      members: [me.id, user.id],
+    });
+    await channel.watch();
+    router.replace(`/(home)/channel/${channel.cid}`);
+    onPress(); // Call the original onPress if needed
+  };
+
   return (
     <TouchableOpacity 
       className="flex-row items-center px-4 py-3 border-b border-gray-100"
-      onPress={onPress}
+      onPress={handlePress}
     >
       {user.avatar_url ? (
         <Image
