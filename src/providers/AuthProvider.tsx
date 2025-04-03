@@ -21,23 +21,33 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     const fetchSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSessionState(session);
-      
-      if (session?.user) {
-        // Fetch username from users table
-        const { data: userData, error } = await supabase
-          .from('users')
-          .select('username')
-          .eq('id', session.user.id)
-          .single();
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSessionState(session);
         
-        if (!error && userData) {
-          setUsername(userData.username);
+        if (session?.user) {
+          // Fetch username and additional user data from users table
+          const { data: userData, error } = await supabase
+            .from('users')
+            .select('username, email, phone, avatar_url, bio, website, gender, date_of_birth, is_private, verified')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (!error && userData) {
+            setUsername(userData.username);
+            // You can set other user data here if needed
+          }
+
+          // Removed profile fetching as it is not needed
+          // Handle user data if needed
+          console.log(userData);
         }
+
+        setIsReady(true); // Moved this line to the end of the session fetching logic
+      } catch (error) {
+        console.error('Error fetching session:', error);
+        setIsReady(true);
       }
-      
-      setIsReady(true);
     };
 
     fetchSession();
