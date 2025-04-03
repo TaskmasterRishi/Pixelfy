@@ -40,6 +40,7 @@ const EditProfileScreen = () => {
     full_name: ''
   });
   const [originalData, setOriginalData] = useState(null);
+  const [lastPressTime, setLastPressTime] = useState(0);
 
   useEffect(() => {
     fetchProfile();
@@ -267,6 +268,7 @@ const EditProfileScreen = () => {
             <TouchableOpacity 
               onPress={handleSave}
               disabled={isSaving}
+              style={{ paddingHorizontal: 16, paddingVertical: 8 }}
             >
               <Text className={`font-semibold ${isSaving ? 'text-gray-400' : 'text-blue-500'}`}>
                 {isSaving ? 'Saving...' : 'Done'}
@@ -318,7 +320,8 @@ const EditProfileScreen = () => {
               <TouchableOpacity 
                 onPress={handleAvatarUpload}
                 disabled={isSaving}
-                className="py-2 px-4 rounded-lg active:opacity-70"
+                className="py-3 px-6 rounded-lg active:opacity-70"
+                style={{ paddingVertical: 12, paddingHorizontal: 24 }}
               >
                 <Text 
                   className={`text-sm font-medium ${

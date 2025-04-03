@@ -70,6 +70,11 @@ const ProfileScreen = () => {
   const [isViewImageVisible, setIsViewImageVisible] = useState(false); // State to control ViewImage visibility
   const [showOptions, setShowOptions] = useState(false);
   const optionsPanelY = useSharedValue(500);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -268,7 +273,7 @@ const ProfileScreen = () => {
   };
 
   const handleAvatarPress = () => {
-    if (stories.length > 0) {
+    if (stories.length > 0 && isMounted) {
       // Create grouped stories object with proper structure
       const groupedStories = {
         [user.id]: stories.map(story => ({
@@ -308,8 +313,10 @@ const ProfileScreen = () => {
         throw error;
       }
       
-      // Redirect to auth page
-      router.replace('/(auth)/');
+      // Only navigate if component is mounted
+      if (isMounted) {
+        router.replace('/(auth)/');
+      }
     } catch (error) {
       console.error('Error logging out:', error);
       Alert.alert('Error', 'Failed to log out. Please try again.');
@@ -387,14 +394,20 @@ const ProfileScreen = () => {
               <Text className="text-lg font-bold">{postsCount}</Text>
               <Text className="text-sm text-gray-500">Posts</Text>
             </View>
-            <View className="items-center">
+            <TouchableOpacity 
+              className="items-center"
+              onPress={() => router.push(`/(screens)/follow-list?type=followers&userId=${user.id}`)}
+            >
               <Text className="text-lg font-bold">{followersCount}</Text>
               <Text className="text-sm text-gray-500">Followers</Text>
-            </View>
-            <View className="items-center">
+            </TouchableOpacity>
+            <TouchableOpacity 
+              className="items-center"
+              onPress={() => router.push(`/(screens)/follow-list?type=following&userId=${user.id}`)}
+            >
               <Text className="text-lg font-bold">{followingCount}</Text>
               <Text className="text-sm text-gray-500">Following</Text>
-            </View>
+            </TouchableOpacity>
           </View>
 
           <View className="flex-row gap-2 mb-6">

@@ -181,7 +181,7 @@ const HelpScreen = () => {
         {/* App Info */}
         <View className="p-6 border-t border-gray-100">
           <Text className="text-sm text-gray-500 text-center">
-            Pixelfy Version 1.0.0 • © 2023 Pixelfy, Inc.
+            Pixelfy Version 1.0.0 • © 2025 Pixelfy, Inc.
           </Text>
         </View>
       </ScrollView>
