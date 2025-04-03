@@ -1,18 +1,17 @@
-import { Redirect, Stack } from 'expo-router';
-import { Chat, OverlayProvider } from 'stream-chat-expo';
-import { StreamChat } from 'stream-chat';
+import { Redirect, Stack } from "expo-router";
+import { Chat, OverlayProvider } from "stream-chat-expo";
+import { StreamChat } from "stream-chat";
+import ChatProvider from "~/providers/ChatProvider";
 
-const client = StreamChat.getInstance("cxc6zzq7e93f");
+const client = StreamChat.getInstance(process.env.EXPO_PUBLIC_STREAM_API_KEY);
 
 export default function HomeLayout() {
   return (
-    <OverlayProvider>
-      <Chat client={client}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="channel" options={{ headerShown: false }} />
-        </Stack>
-      </Chat>
-    </OverlayProvider>
+    <ChatProvider>
+      <Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="channel" options={{ headerShown: false }} />
+      </Stack>
+    </ChatProvider>
   );
 }
