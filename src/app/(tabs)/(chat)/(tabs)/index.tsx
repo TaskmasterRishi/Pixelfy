@@ -22,7 +22,9 @@ export default function ChatScreen() {
             } else {
                 const avatars: { [key: string]: string } = {};
                 data.forEach(user => {
-                    avatars[user.id] = user.avatar_url;
+                    const cloudinaryUrl = `https://res.cloudinary.com/YOUR_CLOUD_NAME/image/upload/${user.avatar_url}`;
+                    console.log(`Avatar URL for user ${user.id}: ${cloudinaryUrl}`);
+                    avatars[user.id] = cloudinaryUrl;
                 });
                 setUserAvatars(avatars);
             }
