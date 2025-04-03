@@ -351,14 +351,10 @@ const ProfileScreen = () => {
         </View>
       </View>
 
-      <ScrollView 
-        className="flex-1 bg-white"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        <View className="px-4 py-6 bg-white rounded-lg mb-4">
-          <View className="flex-row mb-4">
+      <ScrollView className="flex-1 bg-white">
+        {/* Profile Info Section */}
+        <View className="p-6">
+          <View className="flex-row items-center mb-6">
             <TouchableOpacity 
               onPress={handleAvatarPress}
               disabled={stories.length === 0}
@@ -367,29 +363,30 @@ const ProfileScreen = () => {
               {profile.avatar_url ? (
                 <Image
                   source={{ uri: profile.avatar_url }}
-                  className={`w-24 h-24 rounded-full border-2 ${
+                  className={`w-20 h-20 rounded-full border-2 ${
                     stories.length > 0 ? 'border-blue-500' : 'border-gray-200'
                   }`}
                 />
               ) : (
-                <View className="w-24 h-24 rounded-full bg-gray-100 items-center justify-center border-2 border-gray-200">
-                  <FontAwesome name="user" size={40} color="#9ca3af" />
+                <View className="w-20 h-20 rounded-full bg-gray-100 items-center justify-center border-2 border-gray-200">
+                  <FontAwesome name="user" size={32} color="#9ca3af" />
                 </View>
               )}
             </TouchableOpacity>
 
-            <View className="flex-1 justify-center">
-              <Text className="text-lg font-bold">{username}</Text>
+            <View className="flex-1">
+              <Text className="text-xl font-bold">{username}</Text>
               {profile.full_name && (
-                <Text className="text-sm font-semibold">{profile.full_name}</Text>
+                <Text className="text-base text-gray-600">{profile.full_name}</Text>
               )}
               {bio && (
-                <Text className="text-sm mt-1">{bio}</Text>
+                <Text className="text-sm text-gray-500 mt-1">{bio}</Text>
               )}
             </View>
           </View>
 
-          <View className="flex-row justify-around mb-4">
+          {/* Stats */}
+          <View className="flex-row justify-around bg-white p-4 rounded-lg shadow-sm border border-gray-100">
             <View className="items-center">
               <Text className="text-lg font-bold">{postsCount}</Text>
               <Text className="text-sm text-gray-500">Posts</Text>
@@ -409,105 +406,75 @@ const ProfileScreen = () => {
               <Text className="text-sm text-gray-500">Following</Text>
             </TouchableOpacity>
           </View>
+        </View>
 
-          <View className="flex-row gap-2 mb-6">
-            <TouchableOpacity 
+        {/* Quick Actions */}
+        <View className="p-6 bg-gray-50">
+          <Text className="text-xl font-semibold mb-4">Quick Actions</Text>
+          <View className="flex-row flex-wrap -mx-2">
+            <TouchableOpacity
+              className="w-1/2 px-2 mb-4"
               onPress={() => router.push('/(screens)/edit-profile')}
-              className="flex-1 py-2 rounded-lg bg-blue-500"
             >
-              <Text className="text-center text-white font-semibold">Edit Profile</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              onPress={handleShareProfile}
-              className="flex-1 py-2 rounded-lg bg-green-500"
-            >
-              <Text className="text-center text-white font-semibold">Share Profile</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Grid Toggle */}
-        <View className="flex-row border-t border-gray-200">
-          <TouchableOpacity 
-            onPress={() => setActiveTab('posts')}
-            className={`flex-1 p-3 items-center ${
-              activeTab === 'posts' ? 'border-b-2 border-black' : ''
-            }`}
-          >
-            <FontAwesome 
-              name="th" 
-              size={24} 
-              color={activeTab === 'posts' ? 'black' : 'gray'} 
-            />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            onPress={() => setActiveTab('saved')}
-            className={`flex-1 p-3 items-center ${
-              activeTab === 'saved' ? 'border-b-2 border-black' : ''
-            }`}
-          >
-            <FontAwesome 
-              name="bookmark-o" 
-              size={24} 
-              color={activeTab === 'saved' ? 'black' : 'gray'} 
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* Posts Grid */}
-        {activeTab === 'posts' && (
-          <View className="flex-row flex-wrap mt-5" style={{ width: '100%' }}>
-            {posts.map((post) => (
-              <TouchableOpacity 
-                key={post.id} 
-                className="w-[48%] mb-2 mx-[1%]"
-                onPress={() => handlePostPress(post)}
-              >
-                <View className="aspect-square rounded-lg shadow-sm bg-gray-100 overflow-hidden">
-                  <Image
-                    source={{ uri: post.media_url }}
-                    className="w-full h-full"
-                    style={{ resizeMode: 'cover' }}
-                  />
+              <View className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                <View className="w-10 h-10 rounded-full items-center justify-center mb-3 bg-blue-50">
+                  <Feather name="edit" size={20} color="#3b82f6" />
                 </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+                <Text className="text-base font-semibold mb-1">Edit Profile</Text>
+              </View>
+            </TouchableOpacity>
 
-        {/* Empty State */}
-        {posts.length === 0 && activeTab === 'posts' && (
-          <View className="items-center justify-center py-12">
-            <FontAwesome name="camera" size={48} color="#9ca3af" />
-            <Text className="text-gray-400 mt-4 text-center">
-              No Posts Yet
-            </Text>
-            <TouchableOpacity 
-              onPress={() => router.push('/(tabs)/new')}
-              className="mt-4 bg-blue-500 px-6 py-3 rounded-full"
+            <TouchableOpacity
+              className="w-1/2 px-2 mb-4"
+              onPress={handleShareProfile}
             >
-              <Text className="text-white font-semibold">Share Your First Post</Text>
+              <View className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                <View className="w-10 h-10 rounded-full items-center justify-center mb-3 bg-green-50">
+                  <Feather name="share-2" size={20} color="#10b981" />
+                </View>
+                <Text className="text-base font-semibold mb-1">Share Profile</Text>
+              </View>
             </TouchableOpacity>
           </View>
-        )}
+        </View>
 
-        {/* Saved Posts Empty State */}
-        {activeTab === 'saved' && (
-          <View className="items-center justify-center py-12">
-            <FontAwesome name="bookmark" size={48} color="#9ca3af" />
-            <Text className="text-gray-400 mt-4 text-center">
-              No Saved Posts
-            </Text>
-          </View>
-        )}
+        {/* Posts Section */}
+        <View className="p-6">
+          <Text className="text-xl font-semibold mb-4">Your Posts</Text>
+          {posts.length > 0 ? (
+            <View className="flex-row flex-wrap -mx-1">
+              {posts.map((post) => (
+                <TouchableOpacity 
+                  key={post.id} 
+                  className="w-1/3 p-1"
+                  onPress={() => handlePostPress(post)}
+                >
+                  <View className="aspect-square rounded-lg bg-gray-100 overflow-hidden">
+                    <Image
+                      source={{ uri: post.media_url }}
+                      className="w-full h-full"
+                      style={{ resizeMode: 'cover' }}
+                    />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <View className="items-center justify-center py-8">
+              <FontAwesome name="camera" size={48} color="#9ca3af" />
+              <Text className="text-gray-400 mt-4 text-center">
+                No Posts Yet
+              </Text>
+              <TouchableOpacity 
+                onPress={() => router.push('/(tabs)/new')}
+                className="mt-4 bg-blue-500 px-6 py-3 rounded-full"
+              >
+                <Text className="text-white font-semibold">Share Your First Post</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
 
-        {/* Add loading indicator at the bottom */}
-        {hasMorePosts && (
-          <View className="py-4">
-            <ActivityIndicator size="small" color="#0ea5e9" />
-          </View>
-        )}
       </ScrollView>
 
       {/* ViewImage Modal */}
@@ -552,7 +519,7 @@ const ProfileScreen = () => {
           <TouchableOpacity 
             onPress={() => {
               setShowOptions(false);
-              // Add your action here
+              router.push('/(screens)/settings');
             }}
             className="flex-row items-center px-6 py-4 border-b border-gray-200"
           >
