@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { Text, View, TouchableOpacity, useWindowDimensions, Image } from "react-native";
 import { Ionicons, AntDesign, Feather, Entypo } from '@expo/vector-icons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -13,6 +13,8 @@ import Animated, {
   Easing,
   runOnJS
 } from 'react-native-reanimated';
+import { handleLike, LikeButton, checkIfLiked } from './LikeButton';
+import { useAuth } from '~/providers/AuthProvider';
 
 interface User {
   id: string; // UUID
@@ -43,8 +45,7 @@ interface PostListItemProps {
   onShare?: (postId: string) => void;
   onBookmark?: (postId: string) => void;
   onProfilePress?: (userId: string) => void;
-  // Add isLiked prop to track if the current user has liked the post
-  isLiked?: boolean;
+  currentUserId?: string;
 }
 
 export default function PostListItem({ 
@@ -54,17 +55,19 @@ export default function PostListItem({
   onShare,
   onBookmark,
   onProfilePress,
-  isLiked = false // Default to false
+  currentUserId
 }: PostListItemProps) {
   const { width } = useWindowDimensions();
   const [avatarError, setAvatarError] = useState(false);
-  const [liked, setLiked] = useState(isLiked);
+  const [liked, setLiked] = useState(false);
   const [imageError, setImageError] = useState(false);
   
   const [lastTap, setLastTap] = useState(0);
   const heartScale = useSharedValue(0);
   const likeScale = useSharedValue(1);
   const contentOpacity = useSharedValue(0);
+
+  const { user } = useAuth();
 
   const avatarUrl = useMemo(() => {
     return post.user?.avatar_url && !avatarError
@@ -76,7 +79,39 @@ export default function PostListItem({
     return formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
   }, [post.created_at]);
 
-  const handleDoubleTapLike = useCallback(() => {
+  // Check if the post is liked when the component mounts
+  useEffect(() => {
+    const fetchLikeStatus = async () => {
+      try {
+        const isLiked = await checkIfLiked(post.id, user.id);
+        setLiked(isLiked);
+      } catch (error) {
+        console.error('Error fetching like status:', error);
+      }
+    };
+    
+    fetchLikeStatus();
+  }, [post.id, user.id]);
+
+  const handleLikePress = async () => {
+    try {
+      const newLikedState = await handleLike({
+        postId: post.id,
+        postUserId: post.user_id,
+        isLiked: liked,
+        onLikeChange: (newState) => {
+          setLiked(newState);
+          onLike?.(post.id);
+        },
+        userId: user.id
+      });
+      setLiked(newLikedState);
+    } catch (error) {
+      console.error('Error handling like:', error);
+    }
+  };
+
+  const handleDoubleTapLike = useCallback(async () => {
     if (!liked) {
       // Show and animate the heart overlay
       heartScale.value = 0;
@@ -85,12 +120,10 @@ export default function PostListItem({
         withTiming(1, { duration: 500 }),
         withTiming(0, { duration: 200 })
       );
-      runOnJS(setLiked)(true);
-      if (onLike) {
-        runOnJS(onLike)(post.id);
-      }
+      
+      await handleLikePress();
     }
-  }, [liked, post.id, onLike]);
+  }, [liked, post.id, post.user_id, onLike, user.id]);
 
   const handleImagePress = useCallback(() => {
     const now = Date.now();
@@ -101,15 +134,6 @@ export default function PostListItem({
     }
     setLastTap(now);
   }, [lastTap, handleDoubleTapLike]);
-
-  const handleLike = useCallback(() => {
-    likeScale.value = withSequence(
-      withSpring(0.8),
-      withSpring(1)
-    );
-    setLiked(prev => !prev);
-    onLike?.(post.id);
-  }, [post.id, onLike]);
 
   const handleProfilePress = useCallback(() => {
     onProfilePress?.(post.user_id);
@@ -207,16 +231,10 @@ export default function PostListItem({
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-4">
             <TouchableOpacity 
-              onPress={handleLike}
+              onPress={handleLikePress}
               className="active:opacity-60"
             >
-              <Animated.View style={likeButtonStyle}>
-                <AntDesign 
-                  name={liked ? "heart" : "hearto"} 
-                  size={26} 
-                  color={liked ? "#FF3B30" : "#262626"} 
-                />
-              </Animated.View>
+              <LikeButton isLiked={liked} />
             </TouchableOpacity>
             <TouchableOpacity 
               onPress={() => onComment?.(post.id)}
