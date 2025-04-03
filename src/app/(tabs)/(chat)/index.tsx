@@ -1,19 +1,9 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Channel, ChannelList, MessageInput, MessageList } from 'stream-chat-expo';
-import { Channel as ChannelType, StreamChat } from "stream-chat";
+import { View, Text } from 'react-native';
+import React, { useEffect } from 'react';
+import { Redirect, useRouter } from 'expo-router';
 
-export default function MainChatScreen() {
-
-    const [channel, setChannel] = useState();
-    if(channel){
-        return(
-            <Channel channel={channel}>
-                <MessageList/>
-                <MessageInput/>
-            </Channel>
-        )
-    }
-
-    return <ChannelList onSelect={setChannel}/>
+const index = () => {
+  return <Redirect href={'/(chat)/(tabs)'} />;
 }
+
+export default index;

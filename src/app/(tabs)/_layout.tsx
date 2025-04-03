@@ -182,8 +182,8 @@ export default function TabLayout() {
                     name="notification"
                     options={{
                         title: 'Notifications',
-                        tabBarIcon: ({ color, focused }) => (
-                            <TabIcon name="bell" color={color} focused={focused} />
+                        tabBarIcon: ({ color }) => (
+                            <FontAwesome name="bell" size={24} color={color} />
                         ),
                     }}
                 />
