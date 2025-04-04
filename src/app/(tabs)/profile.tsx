@@ -67,10 +67,10 @@ const ProfileScreen = () => {
   const [followingCount, setFollowingCount] = useState(0);
   const [stories, setStories] = useState<Story[]>([]);
   const [showStoryViewer, setShowStoryViewer] = useState(false);
-  const [isViewImageVisible, setIsViewImageVisible] = useState(false); // State to control ViewImage visibility
   const [showOptions, setShowOptions] = useState(false);
   const optionsPanelY = useSharedValue(500);
   const [isMounted, setIsMounted] = useState(false);
+  const [isDataReady, setIsDataReady] = useState(false); // New state for data readiness
 
   useEffect(() => {
     setIsMounted(true);
@@ -119,6 +119,7 @@ const ProfileScreen = () => {
 
   const fetchProfile = async () => {
     setIsLoading(true);
+    setIsDataReady(false); // Set to false when starting to fetch data
     try {
       const [profileResponse, postsResponse, followersResponse, followingResponse] = await Promise.all([
         supabase
@@ -175,6 +176,7 @@ const ProfileScreen = () => {
       setFollowersCount(followersCount);
       setFollowingCount(followingCount);
 
+      setIsDataReady(true); // Set to true after all data is fetched
     } catch (error) {
       console.error('Error fetching profile data:', error.message);
       Alert.alert('Error', 'Failed to load profile data');
@@ -261,6 +263,7 @@ const ProfileScreen = () => {
   };
 
   const handlePostPress = (post: Post) => {
+    // Directly set the selected post without delay
     setSelectedPost({
       id: post.id,
       mediaUrl: post.media_url,
@@ -268,7 +271,13 @@ const ProfileScreen = () => {
       avatarUrl: post.user.avatar_url,
       timestamp: post.created_at,
       caption: post.caption,
-      likesCount: post.likes_count
+      likesCount: post.likes_count,
+      comments: []
+    });
+
+    // Force a re-render by setting state twice
+    requestAnimationFrame(() => {
+      setSelectedPost(prev => ({...prev}));
     });
   };
 
@@ -323,7 +332,7 @@ const ProfileScreen = () => {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || !isDataReady) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
         <ActivityIndicator size="large" color="#0ea5e9" />
@@ -351,15 +360,7 @@ const ProfileScreen = () => {
         </View>
       </View>
 
-      <ScrollView 
-        className="flex-1 bg-white"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-          />
-        }
-      >
+      <ScrollView className="flex-1 bg-white">
         {/* Profile Info Section */}
         <View className="p-6">
           <View className="flex-row items-center mb-6">
