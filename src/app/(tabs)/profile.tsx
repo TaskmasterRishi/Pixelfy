@@ -351,7 +351,15 @@ const ProfileScreen = () => {
         </View>
       </View>
 
-      <ScrollView className="flex-1 bg-white">
+      <ScrollView 
+        className="flex-1 bg-white"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+          />
+        }
+      >
         {/* Profile Info Section */}
         <View className="p-6">
           <View className="flex-row items-center mb-6">
