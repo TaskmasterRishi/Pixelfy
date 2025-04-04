@@ -32,3 +32,28 @@ export const triggerNotification = async ({
     return false;
   }
 };
+
+export const deleteNotification = async ({
+  postId,
+  senderId,
+  type
+}: {
+  postId: string;
+  senderId: string;
+  type: string;
+}) => {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('post_id', postId)
+      .eq('sender_id', senderId)
+      .eq('type', type);
+    
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting notification:', error);
+    return false;
+  }
+};

@@ -9,6 +9,7 @@ import Animated, {
 import { AntDesign } from '@expo/vector-icons';
 import { supabase } from '~/lib/supabase';
 import { useAuth } from '~/providers/AuthProvider';
+import { triggerNotification } from '~/Components/NotificationTrigger';
 
 interface LikeButtonProps {
   isLiked?: boolean;
@@ -75,6 +76,34 @@ export const handleLike = async ({
         .select();
 
       if (error) throw error;
+
+      // Check if notification already exists
+      const { data: existingNotification } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', postUserId)
+        .eq('sender_id', userId)
+        .eq('post_id', postId)
+        .eq('type', 'like')
+        .maybeSingle();
+
+      if (existingNotification) {
+        // Update existing notification
+        await supabase
+          .from('notifications')
+          .update({ created_at: new Date().toISOString() })
+          .eq('id', existingNotification.id);
+      } else {
+        // Create new notification
+        await supabase
+          .from('notifications')
+          .insert({
+            user_id: postUserId,
+            sender_id: userId,
+            type: 'like',
+            post_id: postId
+          });
+      }
     } else {
       // Unlike the post
       const { data, error } = await supabase
@@ -85,7 +114,14 @@ export const handleLike = async ({
         .select();
 
       if (error) throw error;
-      console.log('Successfully unliked post:', data);
+
+      // Delete notification for unlike
+      await supabase
+        .from('notifications')
+        .delete()
+        .eq('post_id', postId)
+        .eq('sender_id', userId)
+        .eq('type', 'like');
     }
 
     if (onLikeChange) {
