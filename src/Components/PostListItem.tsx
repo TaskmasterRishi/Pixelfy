@@ -200,7 +200,7 @@ export default function PostListItem({
 
   const fetchLikes = async (postId: string) => {
     setLoading(true);
-    console.log("🚀 Fetching likes for post:", postId);
+    // console.log("🚀 Fetching likes for post:", postId);
 
     try {
       const { data, error } = await supabase
@@ -242,7 +242,7 @@ export default function PostListItem({
     setIsCommentsVisible((prev) => !prev); // Toggle visibility
   }, []);
 
-  console.log("🔄 Rendering PostListItem, isSheetVisible:", isSheetVisible, "Selected Post ID:", post.id);
+  // console.log("🔄 Rendering PostListItem, isSheetVisible:", isSheetVisible, "Selected Post ID:", post.id);
 
   useEffect(() => {
     fetchCommentCount(post.id);

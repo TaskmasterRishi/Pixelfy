@@ -16,7 +16,7 @@ const { width, height } = Dimensions.get("window");
 export default function CreatePost() {
   const [caption, setCaption] = useState("");
   const [loading, setLoading] = useState(false);
-  const [postType, setPostType] = useState("post"); // 'post', 'story', or 'reel'
+  const [postType, setPostType] = useState("post"); // 'post' or 'story' only
   const { session } = useAuth();
   const [selectedMedia, setSelectedMedia] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -117,7 +117,7 @@ export default function CreatePost() {
         throw new Error("All media uploads failed");
       }
 
-      const table = postType === "story" ? "stories" : postType === "reel" ? "reels" : "posts";
+      const table = postType === "story" ? "stories" : "posts";
       
       const contentData = uploadedMediaUrls.map((mediaUrl) => ({
         user_id: session.user.id,
@@ -153,7 +153,7 @@ export default function CreatePost() {
         ? `Viewing ${currentIndex + 1}/${selectedMedia.length}` 
         : 'Tap to change media';
     }
-    return `Tap to add ${postType === 'reel' ? 'video' : 'image'}`;
+    return `Tap to add ${postType === 'story' ? 'image' : 'image'}`;
   };
 
   return (
@@ -171,12 +171,6 @@ export default function CreatePost() {
           className={`p-2 px-4 rounded-full ${postType === 'story' ? 'bg-blue-500' : 'bg-gray-200'}`}
         >
           <Text className={`text-base ${postType === 'story' ? 'font-bold text-white' : 'text-gray-700'}`}>Story</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          onPress={() => setPostType('reel')}
-          className={`p-2 px-4 rounded-full ${postType === 'reel' ? 'bg-blue-500' : 'bg-gray-200'}`}
-        >
-          <Text className={`text-base ${postType === 'reel' ? 'font-bold text-white' : 'text-gray-700'}`}>Reel</Text>
         </TouchableOpacity>
       </View>
 
@@ -200,7 +194,7 @@ export default function CreatePost() {
         ) : selectedMedia.length > 0 ? (
           <View className="flex-1 relative">
             <TouchableOpacity 
-              onPress={() => pickMedia(postType === 'reel' ? 'video' : 'image')}
+              onPress={() => pickMedia('image')}
               className="flex-1"
             >
               <Image
@@ -245,11 +239,11 @@ export default function CreatePost() {
           </View>
         ) : (
           <TouchableOpacity 
-            onPress={() => pickMedia(postType === 'reel' ? 'video' : 'image')} 
+            onPress={() => pickMedia('image')}
             className="flex-1 justify-center items-center bg-white"
           >
             <View className="p-6 bg-gray-100 rounded-full">
-              <Ionicons name={postType === 'reel' ? "videocam-outline" : "image-outline"} size={48} color="#3b82f6" />
+              <Ionicons name="image-outline" size={48} color="#3b82f6" />
             </View>
             <Text className="text-gray-600 text-lg font-medium mt-4">
               {getMediaText()}
@@ -267,7 +261,7 @@ export default function CreatePost() {
               : 'No media selected'}
           </Text>
           <TouchableOpacity 
-            onPress={() => pickMedia(postType === 'reel' ? 'video' : 'image')}
+            onPress={() => pickMedia('image')}
             className="flex-row items-center"
           >
             <Ionicons 
@@ -287,7 +281,6 @@ export default function CreatePost() {
           value={caption}
           onChangeText={setCaption}
           placeholder={
-            postType === 'reel' ? "Add a caption for your reel..." :
             postType === 'story' ? "Add a caption for your story..." :
             "Write a caption..."
           }
@@ -310,7 +303,6 @@ export default function CreatePost() {
             <Text className="text-white font-semibold text-lg">
               {selectedMedia.length > 0 ? 
                 (postType === 'story' ? 'Share Story' : 
-                 postType === 'reel' ? 'Share Reel' : 
                  `Share ${selectedMedia.length} ${selectedMedia.length > 1 ? 'Posts' : 'Post'}`) : 
                 `Select media to ${postType}`}
             </Text>
