@@ -12,82 +12,62 @@ const MIN_TRANSLATE_Y = SCREEN_HEIGHT / 5;
 interface LikesPopupProps {
   visible: boolean;
   onClose: () => void;
-  position: { x: number; y: number };
   postId: string;
 }
 
-export default function LikesPopup({ visible, onClose, position, postId }: LikesPopupProps) {
+export default function LikesPopup({ visible, onClose, postId }: LikesPopupProps) {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<any[]>([]);
-  const translateY = useSharedValue(0);
-  const context = useSharedValue({ y: 0 });
+  const translateY = useSharedValue(SCREEN_HEIGHT); // Start off-screen
 
   const gesture = Gesture.Pan()
-    .onStart(() => {
-      context.value = { y: translateY.value };
-    })
     .onUpdate((e) => {
-      translateY.value = e.translationY + context.value.y;
-      translateY.value = Math.max(translateY.value, -MAX_TRANSLATE_Y);
+      translateY.value = Math.max(translateY.value + e.translationY, -MAX_TRANSLATE_Y);
     })
     .onEnd(() => {
       if (translateY.value > -MIN_TRANSLATE_Y) {
         translateY.value = withSpring(SCREEN_HEIGHT);
         onClose();
-      }
-      if (translateY.value < -MIN_TRANSLATE_Y) {
-        translateY.value = withSpring(-MAX_TRANSLATE_Y);
+      } else {
+        translateY.value = withSpring(0); // Snap to open
       }
     });
 
   const reanimatedBottomStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }]
+    transform: [{ translateY: translateY.value }],
   }));
-
-  const scrollTo = (destination: number) => {
-    'worklet';
-    translateY.value = withSpring(destination, { damping: 50 });
-  };
 
   useEffect(() => {
     if (visible) {
-      scrollTo(-SCREEN_HEIGHT / 3);
+      translateY.value = withSpring(0); // Snap to open
+      fetchLikes();
     }
   }, [visible]);
 
-  useEffect(() => {
-    const fetchLikes = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('likes')
-          .select('liker:users!likes_liked_user_fkey(id, username, avatar_url, full_name)')
-          .eq('post_id', postId);
+  const fetchLikes = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('likes')
+        .select('liker:users!likes_liked_user_fkey(id, username, avatar_url, full_name)')
+        .eq('post_id', postId);
 
-        if (error) throw error;
-        setUsers(data?.map(like => like.liker) || []);
-      } catch (error) {
-        console.error('Error fetching likes:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (visible) {
-      fetchLikes();
+      if (error) throw error;
+      setUsers(data?.map(like => like.liker) || []);
+    } catch (error) {
+      console.error('Error fetching likes:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [visible, postId]);
+  };
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity 
-        className="flex-1 bg-black/50" 
-        activeOpacity={1} 
-        onPress={onClose}
-      >
+      <TouchableOpacity className="flex-1 bg-black/50" activeOpacity={1} onPress={onClose}>
         <GestureDetector gesture={gesture}>
           <Animated.View 
             className="absolute bg-white rounded-t-3xl w-full max-h-[90%] p-4 shadow-lg"
-            style={[reanimatedBottomStyle, { top: SCREEN_HEIGHT }]}
+            style={[reanimatedBottomStyle]}
           >
             <View className="w-12 h-1.5 bg-gray-300 rounded-full self-center mb-4" />
             <Text className="text-base font-semibold mb-3">Liked by</Text>
@@ -100,6 +80,7 @@ export default function LikesPopup({ visible, onClose, position, postId }: Likes
                     <UserListItem 
                       key={user.id} 
                       user={user}
+                      isFollowing={false}
                       onPress={onClose}
                     />
                   ))
