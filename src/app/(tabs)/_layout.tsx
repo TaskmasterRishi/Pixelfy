@@ -11,6 +11,7 @@ import Animated, {
     Easing,
 } from 'react-native-reanimated';
 import SearchPage from './search';
+import  ChatProvider  from '~/providers/ChatProvider';
 
 const springConfig = {
     damping: 15,
@@ -118,86 +119,82 @@ export default function TabLayout() {
     }
 
     return (
-        <SafeAreaView style={{ flex: 1 }}>
-            <Tabs
-                screenOptions={{
-                    tabBarActiveTintColor: "#007AFF",
-                    tabBarInactiveTintColor: "#8E8E93",
-                    tabBarShowLabel: false,
-                    headerShown: false,
-                    tabBarStyle: {
-                        elevation: 8,
-                        height: 48,
-                        paddingHorizontal: 10,
-                        backgroundColor: '#FFFFFF',
-                        borderTopWidth: 0.5,
-                        borderTopColor: '#DBDBDB',
-                        shadowColor: '#000',
-                        shadowOffset: {
-                            width: 0,
-                            height: -2,
-                        },
-                        shadowOpacity: 0.08,
-                        shadowRadius: 2,
-                    }
-                }}
-            >
-
-
-                <Tabs.Screen
-                    name="index"
-                    options={{
-                        tabBarIcon: ({ color, focused }) => (
-                            <TabIcon name="home" color={color} focused={focused} />
-                        )
+        <ChatProvider>
+            <SafeAreaView style={{ flex: 1 }}>
+                <Tabs
+                    screenOptions={{
+                        tabBarActiveTintColor: "#007AFF",
+                        tabBarInactiveTintColor: "#8E8E93",
+                        tabBarShowLabel: false,
+                        headerShown: false,
+                        tabBarStyle: {
+                            elevation: 8,
+                            height: 48,
+                            paddingHorizontal: 10,
+                            backgroundColor: '#FFFFFF',
+                            borderTopWidth: 0.5,
+                            borderTopColor: '#DBDBDB',
+                            shadowColor: '#000',
+                            shadowOffset: {
+                                width: 0,
+                                height: -2,
+                            },
+                            shadowOpacity: 0.08,
+                            shadowRadius: 2,
+                        }
                     }}
-                />
-                <Tabs.Screen
-                    name="search"
-                    options={{
-                        tabBarIcon: ({ color, focused }) => (
-                            <TabIcon name="search" color={color} focused={focused} />
-                        )
-                    }}
-                />
-                <Tabs.Screen
-                    name="new"
-                    options={{
-                        tabBarIcon: ({ color, focused }) => (
-                            <TabIcon name="plus-square-o" color={color} focused={focused} />
-                        )
-                    }}
-                />
-
-                <Tabs.Screen
-                    name="profile"
-                    options={{
-                        tabBarIcon: ({ color, focused }) => (
-                            <TabIcon name="user" color={color} focused={focused} />
-                        )
-                    }}
-                />
-
-                <Tabs.Screen
-                    name="notification"
-                    options={{
-                        title: 'Notifications',
-                        tabBarIcon: ({ color }) => (
-                            <FontAwesome name="bell" size={24} color={color} />
-                        ),
-                    }}
-                />
-
-                <Tabs.Screen
-                    name="(chat)"
-                    options={{
-                        tabBarIcon: ({ color, focused }) => (
-                            <TabIcon name="comments" color={color} focused={focused} />
-                        )
-                    }}
-                />
-
-            </Tabs>
-        </SafeAreaView>
+                >
+                    <Tabs.Screen
+                        name="index"
+                        options={{
+                            tabBarIcon: ({ color, focused }) => (
+                                <TabIcon name="home" color={color} focused={focused} />
+                            )
+                        }}
+                    />
+                    <Tabs.Screen
+                        name="search"
+                        options={{
+                            tabBarIcon: ({ color, focused }) => (
+                                <TabIcon name="search" color={color} focused={focused} />
+                            )
+                        }}
+                    />
+                    <Tabs.Screen
+                        name="new"
+                        options={{
+                            tabBarIcon: ({ color, focused }) => (
+                                <TabIcon name="plus-square-o" color={color} focused={focused} />
+                            )
+                        }}
+                    />
+                    <Tabs.Screen
+                        name="profile"
+                        options={{
+                            tabBarIcon: ({ color, focused }) => (
+                                <TabIcon name="user" color={color} focused={focused} />
+                            )
+                        }}
+                    />
+                    <Tabs.Screen
+                        name="notification"
+                        options={{
+                            title: 'Notifications',
+                            tabBarIcon: ({ color }) => (
+                                <FontAwesome name="bell" size={24} color={color} />
+                            ),
+                        }}
+                    />
+                    <Tabs.Screen
+                        name="(chat)"
+                        options={{
+                            tabBarIcon: ({ color, focused }) => (
+                                <TabIcon name="comments" color={color} focused={focused} />
+                            )
+                        }}
+                    />
+                </Tabs>
+            </SafeAreaView>
+        </ChatProvider>
     );
 }

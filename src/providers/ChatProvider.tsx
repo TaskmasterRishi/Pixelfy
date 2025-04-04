@@ -29,7 +29,7 @@ export default function ChatProvider({ children }: PropsWithChildren) {
         } else {
           setUsername(data.username);
           if (data.avatar_url) {
-            const cloudinaryUrl = `https://res.cloudinary.com/YOUR_CLOUD_NAME/image/upload/${data.avatar_url}`;
+            const cloudinaryUrl = data.avatar_url;
             console.log("Fetched avatar_url from Cloudinary:", cloudinaryUrl);
             setAvatarUrl(cloudinaryUrl);
           } else {

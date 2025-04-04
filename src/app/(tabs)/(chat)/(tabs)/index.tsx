@@ -1,4 +1,4 @@
-import { View, Text, Image, TouchableOpacity } from 'react-native';
+import { View, Text, Image, TouchableOpacity, RefreshControl } from 'react-native';
 import { ChannelList } from 'stream-chat-expo';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
@@ -10,6 +10,13 @@ export default function ChatScreen() {
     const { user } = useAuth();
     const router = useRouter();
     const [userAvatars, setUserAvatars] = useState<{ [key: string]: string }>({});
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await fetchUserAvatars();
+        setRefreshing(false);
+    };
 
     useEffect(() => {
         const fetchUserAvatars = async () => {
@@ -22,7 +29,7 @@ export default function ChatScreen() {
             } else {
                 const avatars: { [key: string]: string } = {};
                 data.forEach(user => {
-                    const cloudinaryUrl = `https://res.cloudinary.com/YOUR_CLOUD_NAME/image/upload/${user.avatar_url}`;
+                    const cloudinaryUrl = `https://res.cloudinary.com/dbcgxsh5x/image/upload/${user.avatar_url}`;
                     console.log(`Avatar URL for user ${user.id}: ${cloudinaryUrl}`);
                     avatars[user.id] = cloudinaryUrl;
                 });
@@ -60,6 +67,12 @@ export default function ChatScreen() {
                         </View>
                     );
                 }}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                    />
+                }
             />
         </View>
     );
