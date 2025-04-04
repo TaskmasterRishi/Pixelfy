@@ -10,6 +10,7 @@ import { Channel as ChannelType, StreamChat } from "stream-chat";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from '~/providers/AuthProvider';
+import * as MediaLibrary from 'expo-media-library';
 
 const client = StreamChat.getInstance("cxc6zzq7e93f");
 
@@ -18,6 +19,17 @@ export default function ChannelScreen() {
   const { cid } = useLocalSearchParams<{ cid: string }>();
   const { user } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    const requestPermissions = async () => {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        alert('Permission to access media library is required to send files');
+      }
+    };
+
+    requestPermissions();
+  }, []);
 
   useEffect(() => {
     const fetchChannel = async () => {
@@ -55,7 +67,17 @@ export default function ChannelScreen() {
       </View>
       <MessageList />
       <SafeAreaView edges={["bottom"]}></SafeAreaView>
-      <MessageInput />
+      <MessageInput 
+        additionalTextInputProps={{
+          allowFontScaling: false,
+        }}
+        fileUploadsEnabled={true}
+        imageUploadsEnabled={true}
+        sendImageAsync={true}
+        additionalTouchableProps={{
+          activeOpacity: 0.7,
+        }}
+      />
     </Channel>
   );
 }
