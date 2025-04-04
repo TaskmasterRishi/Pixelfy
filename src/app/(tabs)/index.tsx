@@ -12,6 +12,7 @@ import {
   NativeSyntheticEvent,
   Easing,
   StyleSheet,
+  BackHandler,
 } from "react-native";
 import { supabase } from "~/lib/supabase";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -105,6 +106,20 @@ export default function FeedScreen() {
         isActive = false;
       };
     }, [user, username])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        return true;
+      };
+
+      BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      return () => {
+        BackHandler.removeEventListener('hardwareBackPress', onBackPress);
+      };
+    }, [])
   );
 
   const onRefresh = async () => {
