@@ -22,6 +22,8 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import { useAuth } from "~/providers/AuthProvider";
 import { LikeButton } from '~/Components/LikeButton';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import BottomSheet from '@gorhom/bottom-sheet';
+import LikesBottomSheet from '~/Components/LikesBottomSheet';
 
 const PAGE_SIZE = 5;
 
@@ -45,6 +47,8 @@ export default function FeedScreen() {
   const [fontsLoaded] = useFonts({
     "OnryDisplay-Bold": require("~/../assets/fonts/nicolassfonts-onrydisplay-extrabold.otf"),
   });
+
+  const sheetRef = useRef<BottomSheet>(null);
 
   const fetchPosts = async (reset = false) => {
     setLoading(true);
@@ -309,6 +313,9 @@ export default function FeedScreen() {
   const handleLikeButtonPress = (postId: string) => {
     setSelectedPostId(postId);
     setLikesPopupVisible(true);
+    setTimeout(() => {
+      sheetRef.current?.snapToIndex(0);
+    }, 10);
   };
 
   if (!fontsLoaded) {
@@ -374,6 +381,7 @@ export default function FeedScreen() {
                 <PostListItem 
                   post={item} 
                   onLikePress={() => handleLikeButtonPress(item.id)}
+                  onShowLikes={handleLikeButtonPress}
                 />
               )}
               onScroll={handleScroll}
@@ -396,6 +404,19 @@ export default function FeedScreen() {
             />
           )}
         </View>
+
+        {/* Only render LikesBottomSheet when likesPopupVisible is true */}
+        {likesPopupVisible && (
+          <LikesBottomSheet
+            postId={selectedPostId}
+            sheetRef={sheetRef}
+            visible={likesPopupVisible}
+            onClose={() => {
+              setLikesPopupVisible(false);
+              setSelectedPostId(null);
+            }}
+          />
+        )}
       </View>
     </GestureHandlerRootView>
   );

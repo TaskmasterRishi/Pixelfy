@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useCallback, useEffect } from "react";
-import { Text, View, TouchableOpacity, useWindowDimensions, Image } from "react-native";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { Text, View, TouchableOpacity, useWindowDimensions, Image, ActivityIndicator } from "react-native";
 import { Ionicons, AntDesign, Feather, Entypo } from '@expo/vector-icons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { formatDistanceToNow } from "date-fns";
@@ -19,6 +19,8 @@ import { supabase } from '~/lib/supabase';
 import { StyleSheet } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Comments from './Comments';
+import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet';
+import LikesBottomSheet from './LikesBottomSheet';
 
 interface User {
   id: string; // UUID
@@ -50,7 +52,7 @@ interface PostListItemProps {
   onBookmark?: (postId: string) => void;
   onProfilePress?: (userId: string) => void;
   currentUserId?: string;
-  onShowBottomSheet: () => void;
+  onShowLikes: (postId: string) => void;
 }
 
 export default function PostListItem({ 
@@ -61,7 +63,7 @@ export default function PostListItem({
   onBookmark,
   onProfilePress,
   currentUserId,
-  onShowBottomSheet
+  onShowLikes
 }: PostListItemProps) {
   const { width } = useWindowDimensions();
   const [avatarError, setAvatarError] = useState(false);
@@ -191,52 +193,7 @@ export default function PostListItem({
     contentOpacity.value = 1;
   }, []);
 
-  const [isSheetVisible, setIsSheetVisible] = useState(false);
-  const [likes, setLikes] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const [isCommentsVisible, setIsCommentsVisible] = useState(false);
-
-  const fetchLikes = async (postId: string) => {
-    setLoading(true);
-    // console.log("🚀 Fetching likes for post:", postId);
-
-    try {
-      const { data, error } = await supabase
-        .from("likes")
-        .select("id, post_id, user_id, users!likes_user_id_fkey(username, avatar_url)")
-        .eq("post_id", postId);
-
-      if (error) {
-        console.error("❌ Error fetching likes:", error.message);
-        setError("Failed to fetch likes");
-        setLikes([]);
-      } else {
-        // console.log("✅ Likes fetched:", data);
-        setLikes([...data]);
-      }
-    } catch (error) {
-      console.error("❌ Error fetching likes:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const showLikesSheet = (postId: string) => {
-    setIsSheetVisible(true);  // Show the sheet first
-    setLoading(true);
-    
-    fetchLikes(postId).then((data) => {
-      setLikes(data);
-      setLoading(false);
-    });
-  };
-
-  // Update the like count press handler
-  const handleLikeCountPress = () => {
-    showLikesSheet(post.id);
-  };
 
   const handleCommentPress = useCallback(() => {
     setIsCommentsVisible((prev) => !prev); // Toggle visibility
@@ -273,9 +230,16 @@ export default function PostListItem({
       runOnJS(handleDoubleTapLike)(); // Use runOnJS to ensure it runs on the JS thread
     });
 
-  if (!post || !post.user) {
-    console.log("🚨 No post data available!", post);
-    return null;
+  const handleLikeCountPress = useCallback(() => {
+    onShowLikes(post.id);
+  }, [post.id, onShowLikes]);
+
+  if (!post) {
+    return (
+      <View className="p-4">
+        <ActivityIndicator size="small" color="#0000ff" />
+      </View>
+    );
   }
 
   return (
@@ -404,3 +368,27 @@ export default function PostListItem({
     </View>
   );
 }
+
+// Add these styles
+const styles = StyleSheet.create({
+  likeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  contentContainer: {
+    paddingBottom: 20,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+});
