@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { supabase } from '~/lib/supabase';
 import { formatDistanceToNow } from 'date-fns';
+import { Ionicons } from '@expo/vector-icons';
 
 interface Like {
   id: string;
@@ -96,78 +97,50 @@ export default function LikesBottomSheet({
         }
       }}
       onClose={onClose}
+      backgroundComponent={() => (
+        <View className="flex-1 bg-gray-100 rounded-t-2xl" />
+      )}
     >
-      <BottomSheetFlatList
-        data={likes}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => {
-          const likeDate = item.created_at ? new Date(item.created_at) : null;
-          const timeText = likeDate && !isNaN(likeDate.getTime()) 
-            ? formatDistanceToNow(likeDate, { addSuffix: true })
-            : 'Recently';
+      <View className="flex-1 bg-gray-100 rounded-t-2xl">
+        <View className="flex-row justify-between items-center p-4 bg-gray-100 border-b border-gray-200 rounded-t-2xl">
+          <Text className="text-xl font-bold">Likes</Text>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={24} color="black" />
+          </TouchableOpacity>
+        </View>
+        <BottomSheetFlatList
+          data={likes}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => {
+            const likeDate = item.created_at ? new Date(item.created_at) : null;
+            const timeText = likeDate && !isNaN(likeDate.getTime()) 
+              ? formatDistanceToNow(likeDate, { addSuffix: true })
+              : 'Recently';
 
-          return (
-            <View style={styles.likeItem}>
-              <Image
-                source={{ uri: item.users.avatar_url }}
-                style={styles.avatar}
-              />
-              <View style={styles.userInfo}>
-                <Text style={styles.username}>{item.users.username}</Text>
+            return (
+              <View className="flex-row items-center justify-between py-3">
+                <Image
+                  source={{ uri: item.users.avatar_url }}
+                  className="w-10 h-10 rounded-full mr-3"
+                />
+                <View className="flex-1">
+                  <Text className="text-base">{item.users.username}</Text>
+                </View>
+                <Text className="text-sm text-gray-600">
+                  {timeText}
+                </Text>
               </View>
-              <Text style={styles.time}>
-                {timeText}
-              </Text>
+            );
+          }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+          ListEmptyComponent={
+            <View className="flex-1 justify-center items-center p-5">
+              <Text>{loading ? 'Loading...' : 'No likes yet'}</Text>
             </View>
-          );
-        }}
-        contentContainerStyle={styles.contentContainer}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text>{loading ? 'Loading...' : 'No likes yet'}</Text>
-          </View>
-        }
-        style={styles.list}
-      />
+          }
+          className="flex-1"
+        />
+      </View>
     </BottomSheet>
   );
-}
-
-const styles = StyleSheet.create({
-  contentContainer: {
-    padding: 16,
-    paddingBottom: 32,
-  },
-  likeItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  userInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  username: {
-    fontSize: 16,
-  },
-  time: {
-    fontSize: 14,
-    color: '#666',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  list: {
-    flex: 1,
-  },
-}); 
+} 

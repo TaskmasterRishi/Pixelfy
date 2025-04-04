@@ -18,7 +18,6 @@ import { useAuth } from '~/providers/AuthProvider';
 import { supabase } from '~/lib/supabase';
 import { StyleSheet } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
-import Comments from './Comments';
 import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import LikesBottomSheet from './LikesBottomSheet';
 
@@ -123,7 +122,8 @@ export default function PostListItem({
     fetchLikeCount();
   }, [post.id]);
 
-  const fetchCommentCount = async (postId: string) => {
+  // Move fetchCommentCount outside of useEffect
+  const fetchCommentCount = useCallback(async (postId: string) => {
     try {
       const { count, error } = await supabase
         .from('comments')
@@ -135,7 +135,31 @@ export default function PostListItem({
     } catch (error) {
       console.error('Error fetching comment count:', error);
     }
-  };
+  }, []);
+
+  // Update useEffect to use the callback
+  useEffect(() => {
+    fetchCommentCount(post.id);
+  }, [post.id, fetchCommentCount]);
+
+  // Add this useEffect to listen for comment changes
+  useEffect(() => {
+    const channel = supabase
+      .channel(`post:${post.id}:comments`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'comments',
+        filter: `post_id=eq.${post.id}`
+      }, () => {
+        fetchCommentCount(post.id);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [post.id, fetchCommentCount]);
 
   const handleLikePress = async () => {
     if (!user) {
@@ -196,14 +220,8 @@ export default function PostListItem({
   const [isCommentsVisible, setIsCommentsVisible] = useState(false);
 
   const handleCommentPress = useCallback(() => {
-    setIsCommentsVisible((prev) => !prev); // Toggle visibility
-  }, []);
-
-  // console.log("🔄 Rendering PostListItem, isSheetVisible:", isSheetVisible, "Selected Post ID:", post.id);
-
-  useEffect(() => {
-    fetchCommentCount(post.id);
-  }, [post.id]);
+    onComment?.(post.id);
+  }, [onComment, post.id]);
 
   const handleDoubleTapLike = useCallback(async () => {
     if (!liked) {
@@ -259,7 +277,7 @@ export default function PostListItem({
               />
             ) : (
               <View className="w-9 h-9 rounded-full bg-gray-50 items-center justify-center border border-gray-100">
-                <FontAwesome name="user" size={16} color="#666" />
+               <FontAwesome name="user" size={24} color="gray" />
               </View>
             )}
             <View className="ml-3">
@@ -358,13 +376,6 @@ export default function PostListItem({
         {/* Separator */}
         <View className="h-[1px] bg-gray-100 mt-1" />
       </Animated.View>
-
-      {/* Comments Component */}
-      <Comments
-        postId={post.id}
-        isVisible={isCommentsVisible}
-        onClose={() => setIsCommentsVisible(false)}
-      />
     </View>
   );
 }

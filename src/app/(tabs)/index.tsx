@@ -25,6 +25,7 @@ import { LikeButton } from '~/Components/LikeButton';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet from '@gorhom/bottom-sheet';
 import LikesBottomSheet from '~/Components/LikesBottomSheet';
+import CommentBottomSheet from '~/Components/CommentBottomSheet';
 
 const PAGE_SIZE = 5;
 
@@ -37,6 +38,8 @@ export default function FeedScreen() {
   const [hasUnseenNotifications, setHasUnseenNotifications] = useState(false);
   const [likesPopupVisible, setLikesPopupVisible] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [commentsPopupVisible, setCommentsPopupVisible] = useState(false);
+  const [selectedCommentPostId, setSelectedCommentPostId] = useState<string | null>(null);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const lastScrollY = useRef(0);
@@ -50,6 +53,7 @@ export default function FeedScreen() {
   });
 
   const sheetRef = useRef<BottomSheet>(null);
+  const commentSheetRef = useRef<BottomSheet>(null);
 
   const fetchPosts = async (reset = false) => {
     setLoading(true);
@@ -333,6 +337,11 @@ export default function FeedScreen() {
     }, 10);
   };
 
+  const handleCommentPress = useCallback((postId: string) => {
+    setSelectedCommentPostId(postId);
+    setCommentsPopupVisible(true);
+  }, []);
+
   if (!fontsLoaded) {
     return <ActivityIndicator size="large" color="#000" />;
   }
@@ -397,6 +406,7 @@ export default function FeedScreen() {
                   post={item} 
                   onLikePress={() => handleLikeButtonPress(item.id)}
                   onShowLikes={handleLikeButtonPress}
+                  onComment={handleCommentPress}
                 />
               )}
               onScroll={handleScroll}
@@ -429,6 +439,19 @@ export default function FeedScreen() {
             onClose={() => {
               setLikesPopupVisible(false);
               setSelectedPostId(null);
+            }}
+          />
+        )}
+
+        {/* Comments Bottom Sheet */}
+        {commentsPopupVisible && (
+          <CommentBottomSheet
+            postId={selectedCommentPostId}
+            sheetRef={commentSheetRef}
+            visible={commentsPopupVisible}
+            onClose={() => {
+              setCommentsPopupVisible(false);
+              setSelectedCommentPostId(null);
             }}
           />
         )}
