@@ -16,6 +16,10 @@ import Animated, {
 import { handleLike, LikeButton, checkIfLiked } from './LikeButton';
 import { useAuth } from '~/providers/AuthProvider';
 import { supabase } from '~/lib/supabase';
+import { StyleSheet } from 'react-native';
+import SimpleBottomSheet from './SimpleBottomSheet';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import Comments from './Comments';
 
 interface User {
   id: string; // UUID
@@ -47,6 +51,7 @@ interface PostListItemProps {
   onBookmark?: (postId: string) => void;
   onProfilePress?: (userId: string) => void;
   currentUserId?: string;
+  onShowBottomSheet: () => void;
 }
 
 export default function PostListItem({ 
@@ -56,7 +61,8 @@ export default function PostListItem({
   onShare,
   onBookmark,
   onProfilePress,
-  currentUserId
+  currentUserId,
+  onShowBottomSheet
 }: PostListItemProps) {
   const { width } = useWindowDimensions();
   const [avatarError, setAvatarError] = useState(false);
@@ -71,6 +77,7 @@ export default function PostListItem({
   const { user } = useAuth();
 
   const [likeCount, setLikeCount] = useState(0);
+  const [commentCount, setCommentCount] = useState(0);
 
   const avatarUrl = useMemo(() => {
     return post.user?.avatar_url && !avatarError
@@ -85,6 +92,7 @@ export default function PostListItem({
   // Check if the post is liked when the component mounts
   useEffect(() => {
     const fetchLikeStatus = async () => {
+      if (!user) return; // Ensure user is defined
       try {
         const isLiked = await checkIfLiked(post.id, user.id);
         setLiked(isLiked);
@@ -114,7 +122,26 @@ export default function PostListItem({
     fetchLikeCount();
   }, [post.id]);
 
+  const fetchCommentCount = async (postId: string) => {
+    try {
+      const { count, error } = await supabase
+        .from('comments')
+        .select('*', { count: 'exact', head: true })
+        .eq('post_id', postId);
+
+      if (error) throw error;
+      setCommentCount(count || 0);
+    } catch (error) {
+      console.error('Error fetching comment count:', error);
+    }
+  };
+
   const handleLikePress = async () => {
+    if (!user) {
+      console.error('User is not authenticated');
+      return; // Exit if user is not defined
+    }
+
     try {
       const newLikedState = await handleLike({
         postId: post.id,
@@ -148,15 +175,11 @@ export default function PostListItem({
     }
   }, [liked, post.id, post.user_id, onLike, user.id]);
 
-  const handleImagePress = useCallback(() => {
-    const now = Date.now();
-    const DOUBLE_TAP_DELAY = 300;
-    
-    if (now - lastTap < DOUBLE_TAP_DELAY) {
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onStart(() => {
       handleDoubleTapLike();
-    }
-    setLastTap(now);
-  }, [lastTap, handleDoubleTapLike]);
+    });
 
   const handleProfilePress = useCallback(() => {
     onProfilePress?.(post.user_id);
@@ -189,122 +212,198 @@ export default function PostListItem({
     contentOpacity.value = 1;
   }, []);
 
+  const [isSheetVisible, setIsSheetVisible] = useState(false);
+  const [likes, setLikes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [isCommentsVisible, setIsCommentsVisible] = useState(false);
+
+  const fetchLikes = async (postId: string) => {
+    setLoading(true);
+    console.log("🚀 Fetching likes for post:", postId);
+
+    try {
+      const { data, error } = await supabase
+        .from("likes")
+        .select("id, post_id, user_id, users!likes_user_id_fkey(username, avatar_url)")
+        .eq("post_id", postId);
+
+      if (error) {
+        console.error("❌ Error fetching likes:", error.message);
+        setError("Failed to fetch likes");
+        setLikes([]);
+      } else {
+        console.log("✅ Likes fetched:", data);
+        setLikes([...data]);
+      }
+    } catch (error) {
+      console.error("❌ Error fetching likes:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const showLikesSheet = (postId: string) => {
+    setIsSheetVisible(true);  // Show the sheet first
+    setLoading(true);
+    
+    fetchLikes(postId).then((data) => {
+      setLikes(data);
+      setLoading(false);
+    });
+  };
+
+  // Update the like count press handler
+  const handleLikeCountPress = () => {
+    showLikesSheet(post.id);
+  };
+
+  const handleCommentPress = useCallback(() => {
+    setIsCommentsVisible((prev) => !prev); // Toggle visibility
+  }, []);
+
+  console.log("🔄 Rendering PostListItem, isSheetVisible:", isSheetVisible, "Selected Post ID:", post.id);
+
+  useEffect(() => {
+    fetchCommentCount(post.id);
+  }, [post.id]);
 
   if (!post || !post.user) {
+    console.log("🚨 No post data available!", post);
     return null;
   }
 
   return (
-    <Animated.View className="bg-white" style={contentAnimatedStyle}>
-      {/* Header */}
-      <TouchableOpacity 
-        className="px-4 py-3 flex-row items-center justify-between"
-        onPress={handleProfilePress}
-      >
-        <View className="flex-row items-center">
-          {avatarUrl ? (
-            <Image
-              source={{ uri: avatarUrl }}
-              className="w-9 h-9 rounded-full border border-gray-100"
-              onError={() => setAvatarError(true)}
-            />
-          ) : (
-            <View className="w-9 h-9 rounded-full bg-gray-50 items-center justify-center border border-gray-100">
-              <FontAwesome name="user" size={16} color="#666" />
-            </View>
-          )}
-          <View className="ml-3">
-            <Text className="font-semibold text-[14px]">
-              {post.user.username}
-              {post.user.verified && (
-                <Ionicons name="checkmark-circle" size={14} color="#3897F0" style={{ marginLeft: 4 }} />
-              )}
-            </Text>
-            <Text className="text-xs text-gray-500">{timeAgo}</Text>
-          </View>
-        </View>
-        <TouchableOpacity className="p-2">
-          <Feather name="more-horizontal" size={20} color="#262626" />
-        </TouchableOpacity>
-      </TouchableOpacity>
-
-      {/* Image with double tap */}
-      <TouchableOpacity 
-        activeOpacity={1}
-        onPress={handleImagePress}
-      >
-        <View className="relative">
-          <Image
-            source={{ uri: post.media_url }}
-            className="w-full bg-gray-100"
-            style={{ height: width, aspectRatio: 1 }}
-            onError={() => setImageError(true)}
-          />
-          <Animated.View 
-            className="absolute inset-0 items-center justify-center pointer-events-none"
-            style={heartAnimatedStyle}
-          >
-            <AntDesign name="heart" size={80} color="white" />
-          </Animated.View>
-        </View>
-      </TouchableOpacity>
-
-      {/* Actions */}
-      <View className="px-4 pt-3 pb-1">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-4">
-            <TouchableOpacity 
-              onPress={handleLikePress}
-              className="active:opacity-60 flex-row items-center gap-2"
-            >
-              <LikeButton isLiked={liked} />
-              <Text className="text-sm font-semibold text-gray-800">
-                {likeCount} likes
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              onPress={() => onComment?.(post.id)}
-              className="active:opacity-60"
-            >
-              <Animated.View>
-                <Feather name="message-circle" size={26} color="#262626" />
-              </Animated.View>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              onPress={() => onShare?.(post.id)}
-              className="active:opacity-60"
-            >
-              <Animated.View>
-                <Feather name="send" size={24} color="#262626" />
-              </Animated.View>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Likes & Caption */}
-        <View className="mt-2">
-          <Text className="font-semibold text-[14px]">
-            {liked ? "You and " : ""}{likeCount} {likeCount === 1 ? 'like' : 'likes'}
-          </Text>
-          {post.caption && (
-            <Text className="text-[14px] leading-5 mt-1">
-              <Text className="font-semibold">{post.user.username} </Text>
-              <Text className="ml-1">{post.caption}</Text>
-            </Text>
-          )}
-        </View>
-
-        {/* Add Comment Button */}
+    <View>
+      <Animated.View className="bg-white" style={contentAnimatedStyle}>
+        {/* Header */}
         <TouchableOpacity 
-          onPress={() => onComment?.(post.id)}
-          className="mt-2 mb-1"
+          className="px-4 py-3 flex-row items-center justify-between"
+          onPress={handleProfilePress}
         >
-          <Text className="text-gray-500 text-sm">Add a comment...</Text>
+          <View className="flex-row items-center">
+            {avatarUrl ? (
+              <Image
+                source={{ uri: avatarUrl }}
+                className="w-9 h-9 rounded-full border border-gray-100"
+                onError={() => setAvatarError(true)}
+              />
+            ) : (
+              <View className="w-9 h-9 rounded-full bg-gray-50 items-center justify-center border border-gray-100">
+                <FontAwesome name="user" size={16} color="#666" />
+              </View>
+            )}
+            <View className="ml-3">
+              <Text className="font-semibold text-[14px]">
+                {post.user.username}
+                {post.user.verified && (
+                  <Ionicons name="checkmark-circle" size={14} color="#3897F0" style={{ marginLeft: 4 }} />
+                )}
+              </Text>
+              <Text className="text-xs text-gray-500">{timeAgo}</Text>
+            </View>
+          </View>
+          <TouchableOpacity className="p-2">
+            <Feather name="more-horizontal" size={20} color="#262626" />
+          </TouchableOpacity>
         </TouchableOpacity>
-      </View>
 
-      {/* Separator */}
-      <View className="h-[1px] bg-gray-100 mt-1" />
-    </Animated.View>
+        {/* Image with double tap */}
+        <GestureDetector gesture={doubleTapGesture}>
+          <TouchableOpacity activeOpacity={1}>
+            <View className="relative">
+              <Image
+                source={{ uri: post.media_url || 'https://via.placeholder.com/500' }}
+                className="w-full bg-gray-100"
+                style={{ height: width, aspectRatio: 1 }}
+                onError={() => setImageError(true)}
+              />
+              <Animated.View 
+                className="absolute inset-0 items-center justify-center pointer-events-none"
+                style={heartAnimatedStyle}
+              >
+                <AntDesign name="heart" size={80} color="white" />
+              </Animated.View>
+            </View>
+          </TouchableOpacity>
+        </GestureDetector>
+
+        {/* Actions */}
+        <View className="px-4 pt-3 pb-1">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center gap-4">
+              <TouchableOpacity 
+                onPress={handleLikePress}
+                className="active:opacity-60 flex-row items-center gap-2"
+              >
+                <LikeButton isLiked={liked} />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={handleLikeCountPress}
+                className="active:opacity-60"
+              >
+                <Text className="text-sm font-semibold text-gray-800">
+                  {likeCount} likes
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={handleCommentPress}
+                className="active:opacity-60 flex-row items-center gap-2"
+              >
+                <Feather name="message-circle" size={26} color="#262626" />
+                <Text className="text-sm font-semibold text-gray-800">{commentCount}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => onShare?.(post.id)}
+                className="active:opacity-60"
+              >
+                <Animated.View>
+                  <Feather name="send" size={24} color="#262626" />
+                </Animated.View>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Likes & Caption */}
+          <View className="mt-2">
+            <Text className="font-semibold text-[14px]">
+              {liked ? "You and " : ""}{likeCount} {likeCount === 1 ? 'like' : 'likes'}
+            </Text>
+            {post.caption && (
+              <Text className="text-[14px] leading-5 mt-1">
+                <Text className="font-semibold">{post.user.username} </Text>
+                <Text className="ml-1">{post.caption}</Text>
+              </Text>
+            )}
+          </View>
+
+          {/* Add Comment Button */}
+          <TouchableOpacity 
+            onPress={handleCommentPress}
+            className="mt-2 mb-1"
+          >
+            <Text className="text-gray-500 text-sm">Add a comment...</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Separator */}
+        <View className="h-[1px] bg-gray-100 mt-1" />
+
+        {/* SimpleBottomSheet */}
+        <SimpleBottomSheet 
+          isVisible={isSheetVisible} 
+          onClose={() => setIsSheetVisible(false)} 
+          postId={post.id}
+        />
+      </Animated.View>
+
+      {/* Comments Component */}
+      <Comments
+        postId={post.id}
+        isVisible={isCommentsVisible}
+        onClose={() => setIsCommentsVisible(false)}
+      />
+    </View>
   );
 }

@@ -11,6 +11,7 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   Easing,
+  StyleSheet,
 } from "react-native";
 import { supabase } from "~/lib/supabase";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -19,6 +20,9 @@ import PostListItem from "~/Components/PostListItem";
 import { useFonts } from "expo-font";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useAuth } from "~/providers/AuthProvider";
+import { LikeButton } from '~/Components/LikeButton';
+import LikesPopup from '~/Components/LikesPopup';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const PAGE_SIZE = 5;
 
@@ -29,6 +33,8 @@ export default function FeedScreen() {
   const router = useRouter();
   const { user, username } = useAuth();
   const [hasUnseenNotifications, setHasUnseenNotifications] = useState(false);
+  const [likesPopupVisible, setLikesPopupVisible] = useState(false);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const lastScrollY = useRef(0);
@@ -301,85 +307,109 @@ export default function FeedScreen() {
     outputRange: ['-15deg', '0deg', '15deg']
   });
 
+  const handleLikeButtonPress = (postId: string) => {
+    setSelectedPostId(postId);
+    setLikesPopupVisible(true);
+  };
+
   if (!fontsLoaded) {
     return <ActivityIndicator size="large" color="#000" />;
   }
 
   return (
-    <View className="flex-1 bg-gray-100">
-      {/* Fixed Header */}
-      <Animated.View
-        style={{
-          transform: [{ translateY: headerTranslateY }],
-          height: 50,
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: "white",
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          paddingHorizontal: 16,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.2,
-          shadowRadius: 4,
-          elevation: 3,
-          zIndex: 10,
-        }}
-      >
-        <Text style={{ fontSize: 24, fontFamily: "OnryDisplay-Bold" }}>Pixelfy</Text>
-        <TouchableOpacity onPress={handleNotificationPress} activeOpacity={1}>
-          <View className="relative">
-            <Animated.View 
-              style={{
-                transform: [
-                  { rotate: rotateInterpolate },
-                  { perspective: 1000 }
-                ]
-              }}
-            >
-              <Ionicons name="notifications" size={28} color="black" />
-            </Animated.View>
-            {hasUnseenNotifications && (
-              <View className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
-            )}
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <View className="flex-1 bg-gray-100">
+        {/* Fixed Header */}
+        <Animated.View
+          style={{
+            transform: [{ translateY: headerTranslateY }],
+            height: 50,
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: "white",
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            paddingHorizontal: 16,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.2,
+            shadowRadius: 4,
+            elevation: 3,
+            zIndex: 10,
+          }}
+        >
+          <Text style={{ fontSize: 24, fontFamily: "OnryDisplay-Bold" }}>Pixelfy</Text>
+          <TouchableOpacity onPress={handleNotificationPress} activeOpacity={1}>
+            <View className="relative">
+              <Animated.View 
+                style={{
+                  transform: [
+                    { rotate: rotateInterpolate },
+                    { perspective: 1000 }
+                  ]
+                }}
+              >
+                <Ionicons name="notifications" size={28} color="black" />
+              </Animated.View>
+              {hasUnseenNotifications && (
+                <View className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+              )}
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
 
-      {/* Content */}
-      <View className="flex-1 bg-gray-100 pb-0">
-        {loading && posts.length === 0 ? (
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator size="large" color="#000" />
-          </View>
-        ) : (
-          <FlatList
-            data={posts}
-            keyExtractor={(item, index) => (item.id ? item.id.toString() : `post-${index}`)}
-            renderItem={({ item }) => <PostListItem post={item} />}
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
-            contentContainerStyle={{ paddingTop: 50 }}
-            ListHeaderComponent={
-              <View className="bg-white">
-                <StoryList />
-              </View>
-            }
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={["#000000"]}
-                tintColor="#000000"
-                progressViewOffset={30}
-              />
-            }
-          />
-        )}
+        {/* Content */}
+        <View className="flex-1 bg-gray-100 pb-0">
+          {loading && posts.length === 0 ? (
+            <View className="flex-1 items-center justify-center">
+              <ActivityIndicator size="large" color="#000" />
+            </View>
+          ) : (
+            <FlatList
+              data={posts}
+              keyExtractor={(item, index) => (item.id ? item.id.toString() : `post-${index}`)}
+              renderItem={({ item }) => (
+                <PostListItem 
+                  post={item} 
+                  onLikePress={() => handleLikeButtonPress(item.id)}
+                />
+              )}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+              contentContainerStyle={{ paddingTop: 50 }}
+              ListHeaderComponent={
+                <View className="bg-white">
+                  <StoryList />
+                </View>
+              }
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={["#000000"]}
+                  tintColor="#000000"
+                  progressViewOffset={30}
+                />
+              }
+            />
+          )}
+        </View>
+        <LikesPopup 
+          visible={likesPopupVisible} 
+          onClose={() => setLikesPopupVisible(false)} 
+          postId={selectedPostId || ''}
+        />
       </View>
-    </View>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+});
