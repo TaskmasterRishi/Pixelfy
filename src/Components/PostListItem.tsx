@@ -17,7 +17,6 @@ import { handleLike, LikeButton, checkIfLiked } from './LikeButton';
 import { useAuth } from '~/providers/AuthProvider';
 import { supabase } from '~/lib/supabase';
 import { StyleSheet } from 'react-native';
-import SimpleBottomSheet from './SimpleBottomSheet';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Comments from './Comments';
 
@@ -161,26 +160,6 @@ export default function PostListItem({
     }
   };
 
-  const handleDoubleTapLike = useCallback(async () => {
-    if (!liked) {
-      // Show and animate the heart overlay
-      heartScale.value = 0;
-      heartScale.value = withSequence(
-        withSpring(1, { damping: 4 }),
-        withTiming(1, { duration: 500 }),
-        withTiming(0, { duration: 200 })
-      );
-      
-      await handleLikePress();
-    }
-  }, [liked, post.id, post.user_id, onLike, user.id]);
-
-  const doubleTapGesture = Gesture.Tap()
-    .numberOfTaps(2)
-    .onStart(() => {
-      handleDoubleTapLike();
-    });
-
   const handleProfilePress = useCallback(() => {
     onProfilePress?.(post.user_id);
   }, [post.user_id, onProfilePress]);
@@ -234,7 +213,7 @@ export default function PostListItem({
         setError("Failed to fetch likes");
         setLikes([]);
       } else {
-        console.log("✅ Likes fetched:", data);
+        // console.log("✅ Likes fetched:", data);
         setLikes([...data]);
       }
     } catch (error) {
@@ -268,6 +247,31 @@ export default function PostListItem({
   useEffect(() => {
     fetchCommentCount(post.id);
   }, [post.id]);
+
+  const handleDoubleTapLike = useCallback(async () => {
+    if (!liked) {
+      try {
+        // Show and animate the heart overlay
+        heartScale.value = 0;
+        heartScale.value = withSequence(
+          withSpring(1, { damping: 4 }),
+          withTiming(1, { duration: 500 }),
+          withTiming(0, { duration: 200 })
+        );
+
+        // Call the like handler
+        await handleLikePress();
+      } catch (error) {
+        console.error('Error during double tap like:', error);
+      }
+    }
+  }, [liked, post.id, post.user_id, onLike, user.id]);
+
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onStart(() => {
+      runOnJS(handleDoubleTapLike)(); // Use runOnJS to ensure it runs on the JS thread
+    });
 
   if (!post || !post.user) {
     console.log("🚨 No post data available!", post);
@@ -309,7 +313,7 @@ export default function PostListItem({
           </TouchableOpacity>
         </TouchableOpacity>
 
-        {/* Image with double tap */}
+        {/* Image with double tap to like */}
         <GestureDetector gesture={doubleTapGesture}>
           <TouchableOpacity activeOpacity={1}>
             <View className="relative">
@@ -389,13 +393,6 @@ export default function PostListItem({
 
         {/* Separator */}
         <View className="h-[1px] bg-gray-100 mt-1" />
-
-        {/* SimpleBottomSheet */}
-        <SimpleBottomSheet 
-          isVisible={isSheetVisible} 
-          onClose={() => setIsSheetVisible(false)} 
-          postId={post.id}
-        />
       </Animated.View>
 
       {/* Comments Component */}

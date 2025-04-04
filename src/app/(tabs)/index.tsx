@@ -21,7 +21,6 @@ import { useFonts } from "expo-font";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useAuth } from "~/providers/AuthProvider";
 import { LikeButton } from '~/Components/LikeButton';
-import LikesPopup from '~/Components/LikesPopup';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const PAGE_SIZE = 5;
@@ -397,11 +396,6 @@ export default function FeedScreen() {
             />
           )}
         </View>
-        <LikesPopup 
-          visible={likesPopupVisible} 
-          onClose={() => setLikesPopupVisible(false)} 
-          postId={selectedPostId || ''}
-        />
       </View>
     </GestureHandlerRootView>
   );
