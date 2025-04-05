@@ -38,7 +38,7 @@ interface Post {
   media_url: string;
   media_type: string;
   created_at: string;
-  user: User;
+  user?: User;
   // Add likes count from the likes table
   likes_count?: number;
 }
@@ -80,86 +80,63 @@ export default function PostListItem({
   const [commentCount, setCommentCount] = useState(0);
 
   const avatarUrl = useMemo(() => {
-    return post.user?.avatar_url && !avatarError
+    return post?.user?.avatar_url && !avatarError
       ? `${post.user.avatar_url}?t=${Date.now()}`
       : null;
-  }, [post.user?.avatar_url, avatarError]);
+  }, [post?.user?.avatar_url, avatarError]);
 
   const timeAgo = useMemo(() => {
     return formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
   }, [post.created_at]);
 
-  // Check if the post is liked when the component mounts
   useEffect(() => {
-    const fetchLikeStatus = async () => {
-      if (!user) return; // Ensure user is defined
+    const fetchData = async () => {
       try {
-        const isLiked = await checkIfLiked(post.id, user.id);
-        setLiked(isLiked);
+        // Fetch user information if not available
+        if (!post.user) {
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', post.user_id)
+            .single();
+
+          if (!userError && userData) {
+            post.user = userData;
+          }
+        }
+
+        // Fetch like count
+        const { count: likeCount, error: likeError } = await supabase
+          .from('likes')
+          .select('*', { count: 'exact', head: true })
+          .eq('post_id', post.id);
+
+        if (!likeError) {
+          setLikeCount(likeCount || 0);
+        }
+
+        // Fetch comment count
+        const { count: commentCount, error: commentError } = await supabase
+          .from('comments')
+          .select('*', { count: 'exact', head: true })
+          .eq('post_id', post.id);
+
+        if (!commentError) {
+          setCommentCount(commentCount || 0);
+        }
+
+        // Check if the post is liked
+        if (user) {
+          const isLiked = await checkIfLiked(post.id, user.id);
+          setLiked(isLiked);
+        }
       } catch (error) {
-        console.error('Error fetching like status:', error);
-      }
-    };
-    
-    fetchLikeStatus();
-  }, [post.id, user.id]);
-
-  // Fetch like count when component mounts
-  useEffect(() => {
-    const fetchLikeCount = async () => {
-      const { count, error } = await supabase
-        .from('likes')
-        .select('*', { count: 'exact', head: true })
-        .eq('post_id', post.id);
-
-      if (error) {
-        console.error('Error fetching like count:', error);
-      } else {
-        setLikeCount(count || 0);
+        console.error('Error fetching data:', error);
       }
     };
 
-    fetchLikeCount();
-  }, [post.id]);
-
-  // Move fetchCommentCount outside of useEffect
-  const fetchCommentCount = useCallback(async (postId: string) => {
-    try {
-      const { count, error } = await supabase
-        .from('comments')
-        .select('*', { count: 'exact', head: true })
-        .eq('post_id', postId);
-
-      if (error) throw error;
-      setCommentCount(count || 0);
-    } catch (error) {
-      console.error('Error fetching comment count:', error);
-    }
-  }, []);
-
-  // Update useEffect to use the callback
-  useEffect(() => {
-    fetchCommentCount(post.id);
-  }, [post.id, fetchCommentCount]);
-
-  // Add this useEffect to listen for comment changes
-  useEffect(() => {
-    const channel = supabase
-      .channel(`post:${post.id}:comments`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'comments',
-        filter: `post_id=eq.${post.id}`
-      }, () => {
-        fetchCommentCount(post.id);
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [post.id, fetchCommentCount]);
+    fetchData();
+  }, [post.id, post.user_id, user?.id]);
 
   const handleLikePress = async () => {
     if (!user) {
@@ -282,8 +259,8 @@ export default function PostListItem({
             )}
             <View className="ml-3">
               <Text className="font-semibold text-[14px]">
-                {post.user.username}
-                {post.user.verified && (
+                {post?.user?.username || 'Unknown User'}
+                {post?.user?.verified && (
                   <Ionicons name="checkmark-circle" size={14} color="#3897F0" style={{ marginLeft: 4 }} />
                 )}
               </Text>
