@@ -119,7 +119,7 @@ export default function TabLayout() {
     }
 
     return (
-        <ChatProvider>
+        // <ChatProvider>
             <SafeAreaView style={{ flex: 1 }}>
                 <Tabs
                     screenOptions={{
@@ -195,6 +195,6 @@ export default function TabLayout() {
                     />
                 </Tabs>
             </SafeAreaView>
-        </ChatProvider>
+        // </ChatProvider>
     );
 }

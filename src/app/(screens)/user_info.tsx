@@ -69,6 +69,26 @@ export default function UserInfo() {
     fetchUserEmail();
   }, []);
 
+  useEffect(() => {
+    const checkProfileCompletion = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', user.id)
+          .single();
+
+        if (profile) {
+          // If profile already exists, redirect to index
+          router.replace('/(tabs)/');
+        }
+      }
+    };
+
+    checkProfileCompletion();
+  }, []);
+
   const validateForm = async () => {
     const newErrors: Record<string, string> = {};
 
@@ -182,12 +202,12 @@ export default function UserInfo() {
       if (error) {
         console.error('Error creating user:', error);
         setIsSubmitting(false);
-        return; // Stop further execution if there's an error
+        return;
       }
 
       console.log('User created:', data);
       
-      // Redirect to (tabs)/ after user info is submitted
+      // Redirect to index page after 1 second
       setTimeout(() => {
         router.replace('/(tabs)/');
       }, 1000);
@@ -225,28 +245,28 @@ export default function UserInfo() {
         }}
       />
 
-      <ScrollView className="flex-1 bg-white pt-4">
-        {/* Welcome Section */}
-        <View className="px-6 pb-8">
+      <ScrollView className="flex-1 bg-white pt-">
+        {/* Header Section */}
+        <View className="bg-blue-50 p-6 pt-20">
           <Text 
             style={{ fontFamily: 'NicolassFont' }}
             className="text-3xl text-blue-500 mb-2"
           >
             Welcome to Pixelfy!
           </Text>
-          <Text className="text-lg text-gray-600">
+          <Text className="text-base text-gray-600">
             Let's create your perfect profile
           </Text>
         </View>
 
-        {/* Form */}
-        <View className="flex-1 px-6 pt-4">
+        {/* Form Section */}
+        <View className="p-6">
           <View className="mb-4">
             <Text className="text-base text-gray-700 mb-2">Username</Text>
             <View className="relative">
               <Ionicons name="at-outline" size={20} color="#6b7280" className="absolute left-3 top-1/2 -translate-y-2.5 z-10" />
               <TextInput
-                className={`border ${errors.username ? 'border-red-500' : 'border-gray-200'} rounded-lg pl-10 pr-3 py-3 text-base`}
+                className={`border ${errors.username ? 'border-red-500' : 'border-gray-200'} rounded-lg pl-10 pr-3 py-3 text-base bg-white`}
                 placeholder="Enter username"
                 value={formData.username}
                 onChangeText={(text) => setFormData({...formData, username: text})}
@@ -262,7 +282,7 @@ export default function UserInfo() {
             <View className="relative">
               <Ionicons name="person-outline" size={20} color="#6b7280" className="absolute left-3 top-1/2 -translate-y-2.5 z-10" />
               <TextInput
-                className="border border-gray-200 rounded-lg pl-10 pr-3 py-3 text-base"
+                className="border border-gray-200 rounded-lg pl-10 pr-3 py-3 text-base bg-white"
                 placeholder="Enter full name"
                 value={formData.fullName}
                 onChangeText={(text) => setFormData({...formData, fullName: text})}
@@ -275,7 +295,7 @@ export default function UserInfo() {
             <View className="flex-row items-center">
               {/* Country Code Selector */}
               <TouchableOpacity 
-                className="flex-row items-center justify-between border border-gray-200 rounded-l-lg pl-3 pr-2 py-3 w-28"
+                className="flex-row items-center justify-between border border-gray-200 rounded-l-lg pl-3 pr-2 py-3 w-28 bg-white"
                 onPress={() => setIsCountryModalVisible(true)}
               >
                 <View className="flex-row items-center space-x-2">
@@ -289,7 +309,7 @@ export default function UserInfo() {
               <View className="flex-1 relative">
                 <Ionicons name="call-outline" size={20} color="#6b7280" className="absolute left-3 top-1/2 -translate-y-2.5 z-10" />
                 <TextInput
-                  className={`border ${errors.phoneNumber ? 'border-red-500' : 'border-gray-200'} rounded-r-lg pl-10 pr-3 py-3 text-base flex-1`}
+                  className={`border ${errors.phoneNumber ? 'border-red-500' : 'border-gray-200'} rounded-r-lg pl-10 pr-3 py-3 text-base flex-1 bg-white`}
                   placeholder="Phone number"
                   keyboardType="phone-pad"
                   value={formData.phoneNumber}
@@ -307,7 +327,7 @@ export default function UserInfo() {
             <View className="relative">
               <Ionicons name="calendar-outline" size={20} color="#6b7280" className="absolute left-3 top-1/2 -translate-y-2.5 z-10" />
               <TouchableOpacity 
-                className={`flex-row items-center justify-between border ${errors.dateOfBirth ? 'border-red-500' : 'border-gray-200'} rounded-lg pl-10 pr-3 py-3`}
+                className={`flex-row items-center justify-between border ${errors.dateOfBirth ? 'border-red-500' : 'border-gray-200'} rounded-lg pl-10 pr-3 py-3 bg-white`}
                 onPress={() => setShowDatePicker(true)}
               >
                 <Text className="text-base">
@@ -334,7 +354,7 @@ export default function UserInfo() {
           <View className="mb-4">
             <Text className="text-base text-gray-700 mb-2">Bio</Text>
             <TextInput
-              className="border border-gray-200 rounded-lg pl-3 py-3 text-base"
+              className="border border-gray-200 rounded-lg pl-3 py-3 text-base bg-white"
               placeholder="Tell us about yourself"
               multiline
               numberOfLines={4}
@@ -348,7 +368,7 @@ export default function UserInfo() {
             <View className="relative">
               <Ionicons name="link-outline" size={20} color="#6b7280" className="absolute left-3 top-1/2 -translate-y-2.5 z-10" />
               <TextInput
-                className="border border-gray-200 rounded-lg pl-10 pr-3 py-3 text-base"
+                className="border border-gray-200 rounded-lg pl-10 pr-3 py-3 text-base bg-white"
                 placeholder="https://example.com"
                 keyboardType="url"
                 value={formData.website}
@@ -360,7 +380,7 @@ export default function UserInfo() {
           <View className="mb-4">
             <Text className="text-base text-gray-700 mb-2">Gender</Text>
             <TouchableOpacity 
-              className="flex-row items-center justify-between border border-gray-200 rounded-lg pl-3 py-3"
+              className="flex-row items-center justify-between border border-gray-200 rounded-lg pl-3 py-3 bg-white"
               onPress={() => setIsGenderModalVisible(true)}
             >
               <Text className="text-base">{formData.gender || 'Select gender'}</Text>
@@ -388,7 +408,7 @@ export default function UserInfo() {
           </View>
 
           <TouchableOpacity 
-            className={`bg-blue-500 px-6 py-4 rounded-lg items-center mt-6 mb-8 ${isSubmitting ? 'opacity-50' : ''}`}
+            className={`bg-blue-500 px-6 py-3 rounded-full items-center mt-6 mb-8 ${isSubmitting ? 'opacity-50' : ''}`}
             onPress={handleSubmit}
             disabled={isSubmitting}
           >

@@ -87,24 +87,37 @@ export default function FeedScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!user || !username) {
-        router.replace("/(screens)/user_info");
-        return;
-      }
-
       let isActive = true;
 
       const fetchData = async () => {
         try {
-          await fetchPosts(true);
+          // First check if user needs to complete profile
+          if (!user || !username) {
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            if (authUser) {
+              const { data: profile } = await supabase
+                .from('users')
+                .select('id')
+                .eq('id', authUser.id)
+                .single();
+
+              if (!profile) {
+                router.replace('/(screens)/user_info');
+                return;
+              }
+            }
+          }
+
+          // If profile is complete, fetch posts
+          if (isActive) {
+            await fetchPosts(true);
+          }
         } catch (error) {
-          console.error("Fetch error:", error);
+          console.error('Fetch error:', error);
         }
       };
 
-      if (isActive) {
-        fetchData();
-      }
+      fetchData();
 
       return () => {
         isActive = false;

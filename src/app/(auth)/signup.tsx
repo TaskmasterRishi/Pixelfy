@@ -156,17 +156,17 @@ export default function SignupPage() {
         </View>
 
         {/* Divider */}
-        <View className="flex-row items-center my-8">
+        {/* <View className="flex-row items-center my-8">
           <View className="flex-1 h-px bg-gray-200" />
           <Text className="text-gray-500 px-4">Or sign up with</Text>
           <View className="flex-1 h-px bg-gray-200" />
-        </View>
+        </View> */}
 
         {/* Google Sign-Up */}
-        <TouchableOpacity className="w-full flex-row items-center justify-center border bg-white shadow-md border-gray-200 rounded-lg py-4">
+        {/* <TouchableOpacity className="w-full flex-row items-center justify-center border bg-white shadow-md border-gray-200 rounded-lg py-4">
           <Ionicons name="logo-google" size={20} color="#DB4437" />
           <Text className="text-gray-700 font-medium ml-2">Continue with Google</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         {/* Footer Links */}
         <View className="flex-row justify-center mt-8">

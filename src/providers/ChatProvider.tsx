@@ -1,4 +1,4 @@
-import { PropsWithChildren, useEffect, useState } from "react";
+import { PropsWithChildren, useEffect, useState, useRef } from "react";
 import { Slot, Stack } from "expo-router";
 import { View, StyleSheet, ActivityIndicator } from "react-native";
 import { StreamChat } from "stream-chat";
@@ -12,69 +12,69 @@ const client = StreamChat.getInstance(process.env.EXPO_PUBLIC_STREAM_API_KEY);
 export default function ChatProvider({ children }: PropsWithChildren) {
   const [isReady, setIsReady] = useState(false);
   const { user } = useAuth();
-  const [username, setUsername] = useState<string | null>(null);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const userDetailsCache = useRef<{ username: string; avatarUrl: string } | null>(null);
 
   useEffect(() => {
-    const fetchUserDetails = async () => {
-      if (user && user.id) {
-        const { data, error } = await supabase
-          .from('users')
-          .select('username, avatar_url')
-          .eq('id', user.id)
-          .single();
+    const connectUser = async () => {
+      if (!user || !user.id) return;
 
-        if (error) {
-          console.error("Error fetching user details:", error);
-        } else {
-          setUsername(data.username);
-          if (data.avatar_url) {
-            const cloudinaryUrl = data.avatar_url;
-            console.log("Fetched avatar_url from Cloudinary:", cloudinaryUrl);
-            setAvatarUrl(cloudinaryUrl);
-          } else {
-            console.log("No avatar_url found for the user.");
-          }
-        }
-      }
-    };
-
-    fetchUserDetails();
-  }, [user]);
-
-  useEffect(() => {
-    if (!user || !user.id || !username || !avatarUrl) {
-      console.log("Waiting for user details to be ready...");
-      return;
-    }
-
-    const connect = async () => {
-      console.log("Attempting to connect user:", { user, username, avatarUrl });
-      try {
+      // Check cache first
+      if (userDetailsCache.current) {
         await client.connectUser(
           {
             id: user.id,
-            name: username || "Anonymous",
-            image: avatarUrl || '',
+            name: userDetailsCache.current.username,
+            image: userDetailsCache.current.avatarUrl,
           },
           client.devToken(user.id)
         );
         setIsReady(true);
-        console.log("User connected successfully");
-      } catch (error) {
-        console.error("Error connecting user:", error);
+        return;
       }
+
+      // If no cache, fetch and connect
+      const { data, error } = await supabase
+        .from('users')
+        .select('username, avatar_url')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        console.error("Error fetching user details:", error);
+        return;
+      }
+
+      // Cache the user details
+      userDetailsCache.current = {
+        username: data.username || "Anonymous",
+        avatarUrl: data.avatar_url || ''
+      };
+
+      await client.connectUser(
+        {
+          id: user.id,
+          name: userDetailsCache.current.username,
+          image: userDetailsCache.current.avatarUrl,
+        },
+        client.devToken(user.id)
+      );
+
+      setIsReady(true);
     };
 
-    connect();
+    // Add a small delay to allow other app initialization
+    const timeout = setTimeout(() => {
+      connectUser();
+    }, 100);
 
     return () => {
+      clearTimeout(timeout);
       if (isReady) {
         client.disconnectUser();
       }
       setIsReady(false);
     };
-  }, [user?.id, username, avatarUrl]);
+  }, [user?.id]);
 
   if (!isReady) {
     return <ActivityIndicator />;
