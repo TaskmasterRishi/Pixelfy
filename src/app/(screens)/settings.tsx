@@ -81,7 +81,7 @@ const SettingsScreen = () => {
 
           <TouchableOpacity 
             className="flex-row items-center p-4 bg-white rounded-lg"
-            onPress={() => router.push('/(screens)/close-friends')}
+            onPress={() => router.push('/(screens)/closefriend')}
           >
             <View className="w-10 h-10 rounded-full items-center justify-center bg-blue-50">
               <MaterialIcons name="people" size={20} color="#3b82f6" />

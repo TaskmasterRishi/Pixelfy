@@ -47,9 +47,12 @@ const CloseFriendsScreen = () => {
   }, []);
 
   const toggleFriend = (friendId: string) => {
-    setCloseFriends(prev =>
-      prev.includes(friendId) ? prev.filter(id => id !== friendId) : [...prev, friendId]
-    );
+    setCloseFriends(prev => {
+      const newFriends = prev.includes(friendId) 
+        ? prev.filter(id => id !== friendId) 
+        : [...prev, friendId];
+      return newFriends;
+    });
   };
 
   const handleSave = async () => {
@@ -87,25 +90,26 @@ const CloseFriendsScreen = () => {
     const isCloseFriend = closeFriends.includes(userItem.id);
 
     return (
-      <View key={userItem.id} className="flex-row items-center justify-between px-4 py-3 bg-white rounded-xl mb-2 shadow-sm">
-        <View className="flex-row items-center space-x-3">
-          <Image
-            source={{ uri: userItem.avatar_url || 'https://placehold.co/64x64' }}
-            className="w-10 h-10 rounded-full"
-          />
-          <View>
-            <Text className="text-base font-semibold text-gray-800">{userItem.full_name}</Text>
-            <Text className="text-sm text-gray-500">@{userItem.username}</Text>
-          </View>
+      <TouchableOpacity 
+        key={userItem.id} 
+        className="flex-row items-center p-4 bg-white rounded-lg mb-2"
+        onPress={() => toggleFriend(userItem.id)}
+      >
+        <Image
+          source={{ uri: userItem.avatar_url || 'https://placehold.co/64x64' }}
+          className="w-10 h-10 rounded-full"
+        />
+        <View className="ml-4 flex-1">
+          <Text className="text-base font-medium text-gray-800">{userItem.full_name}</Text>
+          <Text className="text-sm text-gray-500">@{userItem.username}</Text>
         </View>
-
         <Switch
           trackColor={{ false: "#d1d5db", true: "#0ea5e9" }}
           thumbColor={isCloseFriend ? "#fff" : "#f4f3f4"}
-          onValueChange={() => toggleFriend(userItem.id)}
           value={isCloseFriend}
+          onValueChange={() => toggleFriend(userItem.id)}
         />
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -121,25 +125,38 @@ const CloseFriendsScreen = () => {
     <>
       <Stack.Screen
         options={{
-          headerShown: true,
+          headerShown: false,
           title: 'Close Friends',
-          presentation: 'modal',
-          headerRight: () => (
-            <TouchableOpacity onPress={handleSave} disabled={isSaving} style={{ paddingRight: 16 }}>
-              <Text className={`font-semibold ${isSaving ? 'text-gray-400' : 'text-blue-500'}`}>
-                {isSaving ? 'Saving...' : 'Done'}
-              </Text>
-            </TouchableOpacity>
-          )
+          presentation: 'modal'
         }}
       />
 
-      <ScrollView className="flex-1 bg-gray-100 p-4">
-        <Text className="text-lg font-semibold mb-4 text-gray-800">
-          Select friends to add to your Close Friends list
-        </Text>
+      <ScrollView className="flex-1 bg-white">
+        {/* Header */}
+        <View className="bg-blue-50 p-6 pt-20">
+          <View>
+            <Text className="text-3xl font-bold mb-2">Close Friends</Text>
+            <Text className="text-base text-gray-600">
+              Select friends to add to your Close Friends list. Only these friends will see your exclusive content.
+            </Text>
+          </View>
+        </View>
 
-        {allUsers.map(user => renderUser(user))}
+        {/* Absolute positioned Done button */}
+        <TouchableOpacity 
+          onPress={handleSave} 
+          disabled={isSaving}
+          className="absolute top-20 right-4 bg-blue-500 px-4 py-2 rounded-full z-10"
+        >
+          <Text className={`text-white font-semibold ${isSaving ? 'opacity-50' : ''}`}>
+            {isSaving ? 'Saving...' : 'Done'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* User List */}
+        <View className="p-6">
+          {allUsers.map(user => renderUser(user))}
+        </View>
       </ScrollView>
     </>
   );

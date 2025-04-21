@@ -127,8 +127,15 @@ export default function PostListItem({
 
         // Check if the post is liked
         if (user) {
-          const isLiked = await checkIfLiked(post.id, user.id);
-          setLiked(isLiked);
+          const { count, error } = await supabase
+            .from('likes')
+            .select('*', { count: 'exact', head: true })
+            .eq('post_id', post.id)
+            .eq('user_id', user.id);
+
+          if (!error) {
+            setLiked(count > 0);
+          }
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -151,8 +158,14 @@ export default function PostListItem({
         isLiked: liked,
         onLikeChange: (newState) => {
           setLiked(newState);
-          // Update local like count
-          setLikeCount(prev => newState ? prev + 1 : Math.max(prev - 1, 0));
+          // Fetch the actual like count from the database
+          supabase
+            .from('likes')
+            .select('*', { count: 'exact', head: true })
+            .eq('post_id', post.id)
+            .then(({ count }) => {
+              setLikeCount(count || 0);
+            });
           onLike?.(post.id);
         },
         userId: user.id
