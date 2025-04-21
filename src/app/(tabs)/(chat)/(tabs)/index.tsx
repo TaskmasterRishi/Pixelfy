@@ -29,8 +29,7 @@ export default function ChatScreen() {
             } else {
                 const avatars: { [key: string]: string } = {};
                 data.forEach(user => {
-                    const cloudinaryUrl = `https://res.cloudinary.com/dbcgxsh5x/image/upload/${user.avatar_url}`;
-                    console.log(`Avatar URL for user ${user.id}: ${cloudinaryUrl}`);
+                    const cloudinaryUrl = `${user.avatar_url}`;
                     avatars[user.id] = cloudinaryUrl;
                 });
                 setUserAvatars(avatars);
@@ -40,40 +39,74 @@ export default function ChatScreen() {
         fetchUserAvatars();
     }, []);
 
-    return (
-        <View style={{ flex: 1, padding: 10 }}>
-            <TouchableOpacity 
-                onPress={() => router.push('/(chat)/users')}
-                style={{ alignSelf: 'flex-end', marginBottom: 10 }}
-            >
-                <FontAwesome5 name="users" size={24} color="black" />
-            </TouchableOpacity>
+    useEffect(() => {
+        router.setParams({
+            headerShown: 'false'
+        });
+    }, [router]);
 
-            <ChannelList 
-                filters={{ members: { $in: [user.id] } }}
-                onSelect={(channel) => router.push(`/(chat)/channel/${channel.cid}`)} 
-                ChannelPreview={(channel) => {
-                    const memberId = channel.members[0].user.id;
-                    const avatarUrl = userAvatars[memberId];
-                    return (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 10 }}>
-                            {avatarUrl && (
-                                <Image
-                                    source={{ uri: avatarUrl }}
-                                    style={{ width: 40, height: 40, borderRadius: 20, marginRight: 10 }}
-                                />
-                            )}
-                            <Text>{channel.name}</Text>
-                        </View>
-                    );
-                }}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={onRefresh}
-                    />
-                }
-            />
+    return (
+        <View className="flex-1 bg-gray-50">
+            {/* Header */}
+            <View className="bg-white px-5 pt-5 pb-4 border-b border-gray-200 shadow-sm">
+                <View className="flex-row justify-between items-center">
+                    <View>
+                        <Text className="text-2xl font-bold text-gray-900">Chats</Text>
+                        <Text className="text-sm text-gray-500 mt-1">
+                            Connect with your community
+                        </Text>
+                    </View>
+                    <TouchableOpacity 
+                        onPress={() => router.push('/(chat)/users')}
+                        className="bg-blue-500 p-3 rounded-lg shadow-lg"
+                    >
+                        <FontAwesome5 name="user-plus" size={18} color="white" />
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            {/* Chat List */}
+            <View className="flex-1 p-4">
+                <ChannelList 
+                    filters={{ members: { $in: [user.id] } }}
+                    onSelect={(channel) => router.push(`/(chat)/channel/${channel.cid}`)} 
+                    ChannelPreview={(channel) => {
+                        const memberId = channel.members[0].user.id;
+                        const avatarUrl = userAvatars[memberId];
+                        return (
+                            <View className="flex-row items-center p-4 bg-white rounded-lg shadow-sm mb-3">
+                                {avatarUrl ? (
+                                    <Image
+                                        source={{ uri: avatarUrl }}
+                                        className="w-12 h-12 rounded-full border border-gray-200 mr-4"
+                                    />
+                                ) : (
+                                    <View className="w-12 h-12 rounded-full bg-gray-200 mr-4 justify-center items-center">
+                                        <FontAwesome5 name="user" size={20} color="#94a3b8" />
+                                    </View>
+                                )}
+                                <View className="flex-1">
+                                    <Text className="text-base font-medium text-gray-900">
+                                        {channel.name}
+                                    </Text>
+                                    <Text className="text-sm text-gray-500 mt-1">
+                                        Last message...
+                                    </Text>
+                                </View>
+                                <FontAwesome5 name="chevron-right" size={14} color="#94a3b8" />
+                            </View>
+                        );
+                    }}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            colors={['#3b82f6']}
+                            tintColor="#3b82f6"
+                        />
+                    }
+                />
+            </View>
         </View>
     );
 }

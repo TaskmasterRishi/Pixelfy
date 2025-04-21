@@ -6,6 +6,6 @@ import { Chat, OverlayProvider } from "stream-chat-expo";
 
 export default function ChatLayout() {
   return (
-        <Slot />
+        <Slot screenOptions={{ headerShown: false }}/>
   );
 }
