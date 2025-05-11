@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Modal, Image, TouchableOpacity, View, Text, Pressable, LayoutChangeEvent, ScrollView, TextInput } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { Modal, Image, TouchableOpacity, View, Text, Pressable, LayoutChangeEvent, ScrollView, TextInput, ActivityIndicator } from 'react-native';
 import { GestureHandlerRootView, PinchGestureHandler, PinchGestureHandlerGestureEvent, State } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import Animated, { useAnimatedGestureHandler, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedGestureHandler, useSharedValue, withSpring, useAnimatedStyle, withTiming, Easing, FadeIn, FadeOut, SlideInUp } from 'react-native-reanimated';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '~/providers/AuthProvider';
-import { Alert } from 'react-native';
+import { Alert, Linking } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
@@ -28,12 +28,29 @@ interface ViewImageProps {
   imageUrl: string;
   onClose: () => void;
   postId?: string;
-  username?: string;
-  avatarUrl?: string;
-  timestamp?: string;
-  caption?: string;
-  likesCount?: number;
   initialComments?: Comment[];
+}
+
+// Define the shape of data returned from Supabase
+interface PostDataFromSupabase {
+  id: string;
+  caption: string | null;
+  created_at: string;
+  media_url: string;
+  users: {
+    username: string;
+    avatar_url: string | null;
+  } | null;
+}
+
+interface CommentDataFromSupabase {
+  id: string;
+  content: string;
+  created_at: string;
+  users: {
+    username: string;
+    avatar_url: string | null;
+  } | null;
 }
 
 const formatTimeAgo = (date: Date) => {
@@ -62,11 +79,6 @@ const ViewImage: React.FC<ViewImageProps> = ({
   imageUrl, 
   onClose,
   postId,
-  username,
-  avatarUrl,
-  timestamp,
-  caption,
-  likesCount = 0,
   initialComments = []
 }) => {
   const [fullScreen, setFullScreen] = useState(false);
@@ -79,366 +91,389 @@ const ViewImage: React.FC<ViewImageProps> = ({
     timestamp: Date | null;
     likesCount: number;
     caption: string | null;
-  } | null>(() => {
-    // Initialize with default values even if some props are empty
-    return {
-      username: username || 'Unknown',
-      avatarUrl: avatarUrl || null,
-      timestamp: timestamp ? new Date(timestamp) : null,
-      likesCount: likesCount || 0,
-      caption: caption || null
-    };
-  });
+    postId: string | null;
+  } | null>(null);
   const [comments, setComments] = useState<Comment[]>(initialComments);
   const [showOptions, setShowOptions] = useState(false);
-  const optionsPanelY = useSharedValue(500); // Start off screen
-
-  // Shared values for animated zoom
+  const optionsPanelY = useSharedValue(500);
+  const cardOpacity = useSharedValue(0);
+  const cardScale = useSharedValue(0.95);
   const scale = useSharedValue(1);
-
-  // Add loading state
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [contentReady, setContentReady] = useState(true);
+  const previousPostId = useRef<string | null>(null);
+  
+  const cardAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: cardOpacity.value,
+    transform: [{ scale: cardScale.value }],
+  }));
 
-  // Reset all data when the modal is closed
-  useEffect(() => {
-    if (!visible) {
-      setPostData(null);
-      setComments([]);
-      setShowOptions(false);
-      scale.value = 1;
-    }
-  }, [visible]);
+  const animatedImageStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
-  // Fetch original image dimensions
   useEffect(() => {
     if (imageUrl) {
-      Image.getSize(imageUrl, (width, height) => {
-        setOriginalWidth(width);
-        setOriginalHeight(height);
-      });
+      setOriginalWidth(4);
+      setOriginalHeight(3);
+      
+      Image.getSize(
+        imageUrl,
+        (width, height) => {
+          setOriginalWidth(width);
+          setOriginalHeight(height);
+        },
+        (error) => {
+          console.warn('Failed to get image size:', error);
+        }
+      );
+      
+      Image.prefetch(imageUrl).catch(() => {});
     }
   }, [imageUrl]);
 
-  // Only fetch additional data if needed
   useEffect(() => {
-    const fetchAdditionalData = async () => {
-      if (!postId) return;
+    if (visible) {
+      cardOpacity.value = 0;
+      cardScale.value = 0.95;
+      setIsLoading(true);
       
+      loadingTimeoutRef.current = setTimeout(() => {
+        cardOpacity.value = withTiming(1, { duration: 250 });
+        cardScale.value = withTiming(1, { duration: 250 });
+        setIsLoading(false);
+      }, 300);
+    } else {
+      cardOpacity.value = withTiming(0, { duration: 200 });
+      cardScale.value = withTiming(0.95, { duration: 200 });
+      
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
+    }
+    
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
+    };
+  }, [visible]);
+
+  useEffect(() => {
+    if (!postId || !visible || postId === previousPostId.current) return;
+    
+    previousPostId.current = postId;
+    let isMounted = true;
+
+    const fetchPostData = async () => {
       try {
-        // Fetch updated likes count
-        const { count: likesCount, error: likesError } = await supabase
+        const postPromise = supabase
+          .from('posts')
+          .select(`
+            id, caption, created_at, media_url,
+            users:user_id (username, avatar_url)
+          `)
+          .eq('id', postId)
+          .single();
+
+        const likesPromise = supabase
           .from('likes')
           .select('id', { count: 'exact' })
           .eq('post_id', postId);
 
-        if (!likesError && postData) {
-          setPostData(prev => prev ? {
-            ...prev,
-            likesCount: likesCount || 0
-          } : null);
-        }
-
-        // Fetch updated comments if needed
-        const { data: commentsData, error: commentsError } = await supabase
+        const commentsPromise = supabase
           .from('comments')
           .select(`
-            id,
-            content,
-            created_at,
-            users (
-              username,
-              avatar_url
-            )
+            id, content, created_at,
+            users (username, avatar_url)
           `)
           .eq('post_id', postId)
           .order('created_at', { ascending: true });
 
-        if (!commentsError) {
-          setComments(commentsData.map(comment => ({
+        const [postResult, likesResult, commentsResult] = await Promise.all([
+          postPromise, likesPromise, commentsPromise
+        ]);
+
+        if (!isMounted) return;
+
+        if (postResult.error) throw postResult.error;
+        if (likesResult.error) throw likesResult.error;
+        if (commentsResult.error) throw commentsResult.error;
+
+        const typedPostData = postResult.data as PostDataFromSupabase;
+        const likesCount = likesResult.count || 0;
+        const typedCommentsData = commentsResult.data as CommentDataFromSupabase[];
+
+        setPostData({
+          username: typedPostData.users?.username || 'Unknown',
+          avatarUrl: typedPostData.users?.avatar_url || null,
+          timestamp: typedPostData.created_at ? new Date(typedPostData.created_at) : null,
+          likesCount: likesCount,
+          caption: typedPostData.caption || null,
+          postId: typedPostData.id
+        });
+
+        setComments(
+          typedCommentsData.map(comment => ({
             id: comment.id,
             user: {
-              username: comment.users.username,
-              avatar_url: comment.users.avatar_url
+              username: comment.users?.username || 'Unknown',
+              avatar_url: comment.users?.avatar_url || ''
             },
             content: comment.content,
             created_at: comment.created_at
-          })));
-        }
+          }))
+        );
+
+        setIsLoading(false);
+        setContentReady(true);
+        cardOpacity.value = withTiming(1, { duration: 250 });
+        cardScale.value = withTiming(1, { duration: 250 });
 
       } catch (error) {
-        console.error('Error fetching additional data:', error);
+        if (!isMounted) return;
+        console.error('Error fetching post data:', error);
+        setIsLoading(false);
+        Toast.show({
+          type: 'error',
+          text1: 'Error loading post',
+          text2: 'Please try again'
+        });
       }
     };
 
-    if (visible && postId) {
-      fetchAdditionalData();
-    }
-  }, [visible, postId]);
+    fetchPostData();
+    
+    return () => { isMounted = false; };
+  }, [postId, visible]);
 
-  // Update postData when props change
-  useEffect(() => {
-    setPostData({
-      username: username || 'Unknown',
-      avatarUrl: avatarUrl || null,
-      timestamp: timestamp ? new Date(timestamp) : null,
-      likesCount: likesCount || 0,
-      caption: caption || null
-    });
-  }, [username, avatarUrl, timestamp, caption, likesCount]);
-
-  // Handle pinch-to-zoom gestures
-  const pinchHandler = useAnimatedGestureHandler<PinchGestureHandlerGestureEvent>({
-    onStart: (_, ctx: { startScale: number }) => {
-      ctx.startScale = scale.value;
-    },
+  const pinchHandler = useAnimatedGestureHandler<PinchGestureHandlerGestureEvent, { startScale: number }>({
+    onStart: (_, ctx) => { ctx.startScale = scale.value; },
     onActive: (event, ctx) => {
       scale.value = Math.max(1, Math.min(ctx.startScale * event.scale, 3));
     },
     onEnd: () => {
-      scale.value = withSpring(1); // Reset zoom when user lifts fingers
+      scale.value = withSpring(1);
     },
   });
 
   const handleDownload = async () => {
     try {
-      // Request permissions
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Please grant permission to save images');
+        Alert.alert(
+          'Permission Denied',
+          'Please enable photo library access in settings',
+          [{ text: 'Open Settings', onPress: () => Linking.openSettings() }, { text: 'Cancel' }]
+        );
         return;
       }
-
-      // Download the file
+      
+      Toast.show({
+        type: 'info',
+        text1: 'Downloading image...'
+      });
+      
       const fileUri = FileSystem.documentDirectory + "temp_image.jpg";
       const { uri } = await FileSystem.downloadAsync(imageUrl, fileUri);
-      
-      // Save to gallery
       await MediaLibrary.saveToLibraryAsync(uri);
       
-      // Clean up the temp file
-      await FileSystem.deleteAsync(uri);
-      
-      Alert.alert('Success', 'Image saved to gallery');
-    } catch (error) {
-      console.error('Error downloading image:', error);
-      Alert.alert('Error', 'Failed to download image');
+      Toast.show({
+        type: 'success',
+        text1: 'Image saved to gallery'
+      });
+    } catch (err) {
+      Toast.show({
+        type: 'error',
+        text1: 'Failed to download image'
+      });
+    } finally {
+      FileSystem.deleteAsync(FileSystem.documentDirectory + "temp_image.jpg", { idempotent: true });
     }
   };
 
   const handleShare = async () => {
     try {
-      // Download the file first
+      Toast.show({
+        type: 'info',
+        text1: 'Preparing to share...'
+      });
+      
       const fileUri = FileSystem.documentDirectory + "temp_image.jpg";
       const { uri } = await FileSystem.downloadAsync(imageUrl, fileUri);
-      
-      // Share the file
       await Sharing.shareAsync(uri);
-      
-      // Clean up
-      await FileSystem.deleteAsync(uri);
-    } catch (error) {
-      console.error('Error sharing image:', error);
-      Alert.alert('Error', 'Failed to share image');
+    } catch (err) {
+      Toast.show({
+        type: 'error',
+        text1: 'Failed to share image'
+      });
+    } finally {
+      FileSystem.deleteAsync(FileSystem.documentDirectory + "temp_image.jpg", { idempotent: true });
     }
   };
 
   const handleDeletePost = async () => {
     if (!postId || !user) return;
-
-    Alert.alert(
-      'Delete Post',
-      'Are you sure you want to delete this post? This action cannot be undone.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // Extract public ID from image URL
-              const urlParts = imageUrl.split('/');
-              const publicId = urlParts[urlParts.length - 1].split('.')[0];
-
-              // Delete image from Cloudinary
-              const deleteSuccess = await deleteImage(publicId);
-              if (!deleteSuccess) {
-                throw new Error('Failed to delete image from Cloudinary');
-              }
-
-              // Now delete the post from Supabase
-              const { error } = await supabase
-                .from('posts')
-                .delete()
-                .eq('id', postId)
-                .eq('user_id', user.id);
-
-              if (error) throw error;
-
-              // Show success toast message
-              Toast.show({
-                text1: 'Success',
-                text2: 'Post deleted successfully',
-                type: 'success',
-              });
-
-              onClose();
-            } catch (error) {
-              console.error('Error deleting post:', error);
-              Alert.alert('Error', 'Failed to delete post');
-            }
-          },
-        },
-      ]
-    );
+    
+    Alert.alert('Delete Post', 'This action cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', 
+        style: 'destructive', 
+        onPress: async () => {
+          try {
+            Toast.show({
+              type: 'info',
+              text1: 'Deleting post...'
+            });
+            
+            const publicId = imageUrl.split('/').pop()?.split('.')[0];
+            
+            const deleteSuccess = await deleteImage(publicId!);
+            if (!deleteSuccess) throw new Error('Failed to delete image');
+            
+            const { error } = await supabase
+              .from('posts')
+              .delete()
+              .eq('id', postId)
+              .eq('user_id', user.id);
+              
+            if (error) throw error;
+            
+            Toast.show({
+              type: 'success',
+              text1: 'Post deleted successfully'
+            });
+            
+            onClose();
+          } catch (err) {
+            Toast.show({
+              type: 'error',
+              text1: 'Failed to delete post'
+            });
+          }
+        }
+      }
+    ]);
   };
 
-  // Add this useEffect for animation
   useEffect(() => {
-    if (showOptions) {
-      optionsPanelY.value = withSpring(0, { damping: 15 });
-    } else {
-      optionsPanelY.value = withSpring(500, { damping: 15 });
-    }
+    optionsPanelY.value = withSpring(showOptions ? 0 : 500, { damping: 15 });
   }, [showOptions]);
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <BlurView intensity={2000} tint="dark" className="flex-1 justify-center items-center">
-          
-          {/* Clickable background to close */}
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      <GestureHandlerRootView className="flex-1">
+        <BlurView intensity={1800} tint="dark" className="flex-1 justify-center items-center">
           <Pressable className="absolute inset-0" onPress={onClose} />
 
-          <View className="w-[80%] bg-white rounded-2xl overflow-hidden shadow-2xl">
-            <View>
-              {/* Header */}
-              <View className="flex-row items-center p-4 border-b border-gray-200">
-                <TouchableOpacity onPress={onClose} className="absolute left-2 z-10">
-                  <Feather name="x" size={24} color="black" />
-                </TouchableOpacity>
-                
-                <View className="flex-row items-center flex-1 ml-8">
-                  {postData?.avatarUrl ? (
-                    <Image 
-                      source={{ uri: postData.avatarUrl }} 
-                      className="w-8 h-8 rounded-full"
-                    />
-                  ) : (
-                    <View className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center">
-                      <Feather name="user" size={16} color="black" />
+          <Animated.View 
+            style={cardAnimatedStyle}
+            className="w-[90%] max-w-md bg-white rounded-3xl overflow-hidden shadow-2xl"
+          >
+            {isLoading && (
+              <View className="p-8 h-[520px] items-center justify-center">
+                <ActivityIndicator size="large" color="#0ea5e9" />
+                <Text className="text-lg font-medium text-gray-700 mt-4">Loading post...</Text>
+              </View>
+            )}
+
+            {!isLoading && (
+              <View className="w-full">
+                <View className="flex-row items-center p-4 border-b border-gray-100">
+                  <TouchableOpacity onPress={onClose} className="absolute left-4 z-10 p-2">
+                    <Feather name="x" size={24} color="black" />
+                  </TouchableOpacity>
+                  
+                  <View className="flex-row items-center flex-1 ml-12">
+                    {postData?.avatarUrl ? (
+                      <Image 
+                        source={{ uri: postData.avatarUrl }} 
+                        className="w-10 h-10 rounded-full"
+                      />
+                    ) : (
+                      <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center">
+                        <Feather name="user" size={20} color="black" />
+                      </View>
+                    )}
+                    <View className="ml-3">
+                      <Text className="text-black font-semibold text-base">{postData?.username || 'Unknown'}</Text>
+                      <Text className="text-gray-500 text-xs">
+                        {postData?.timestamp ? formatTimeAgo(postData.timestamp) : 'Just now'}
+                      </Text>
                     </View>
+                  </View>
+                  
+                  {postData?.username === currentUsername && (
+                    <TouchableOpacity 
+                      onPress={() => setShowOptions(true)}
+                      className="p-2"
+                    >
+                      <Feather name="more-horizontal" size={24} color="black" />
+                    </TouchableOpacity>
                   )}
-                  <View className="ml-3">
-                    <Text className="text-black font-semibold">{postData?.username || 'Unknown'}</Text>
-                    <Text className="text-gray-500 text-xs">
-                      {postData?.timestamp ? formatTimeAgo(postData.timestamp) : 'Just now'}
-                    </Text>
-                  </View>
                 </View>
-                
-                {/* Only show 3-dot menu if the current user is the post owner */}
-                {postData?.username === currentUsername && (
-                  <TouchableOpacity 
-                    onPress={() => setShowOptions(true)}
-                    className="p-2"
-                  >
-                    <Feather name="more-horizontal" size={24} color="black" />
-                  </TouchableOpacity>
-                )}
-              </View>
 
-              {/* Image Container */}
-              <PinchGestureHandler onGestureEvent={pinchHandler} onHandlerStateChange={(event) => {
-                if (event.nativeEvent.state === State.END) {
-                  scale.value = withSpring(1);
-                }
-              }}>
-                <Animated.View
-                  style={{
-                    width: '100%',
-                    aspectRatio: originalWidth && originalHeight ? originalWidth / originalHeight : 1,
-                    overflow: 'hidden', // Prevent overflow
-                    backgroundColor: '#000',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Animated.Image
-                    source={{ uri: imageUrl }}
+                <PinchGestureHandler onGestureEvent={pinchHandler} onHandlerStateChange={(event) => {
+                  if (event.nativeEvent.state === State.END) {
+                    scale.value = withSpring(1);
+                  }
+                }}>
+                  <Animated.View 
+                    className="w-full bg-black items-center justify-center" 
                     style={{
-                      width: '100%',
-                      height: '100%',
-                      transform: [{ scale: scale }],
+                      height: 380,
+                      overflow: 'hidden',
                     }}
-                    resizeMode="contain"
-                  />
-                </Animated.View>
-              </PinchGestureHandler>
+                  >
+                    <Animated.Image
+                      source={{ uri: imageUrl }}
+                      className="w-full h-full"
+                      style={[
+                        animatedImageStyle,
+                        {
+                          width: '100%',
+                          height: '100%',
+                          maxWidth: '100%',
+                          maxHeight: '100%',
+                        }
+                      ]}
+                      resizeMode="cover"
+                    />
+                  </Animated.View>
+                </PinchGestureHandler>
 
-              {/* Caption and Comments Section */}
-              <ScrollView className="max-h-40 px-4">
-                {/* Caption */}
-                {postData?.caption && (
-                  <View className="flex-row py-2">
-                    <Text className="font-semibold mr-2">{postData.username}</Text>
-                    <Text>{postData.caption}</Text>
-                  </View>
-                )}
-
-                {/* Comments */}
-                {comments.map((comment) => (
-                  <View key={comment.id} className="flex-row py-2">
-                    <View className="flex-row flex-1">
-                      <Text className="font-semibold mr-2">{comment.user.username}</Text>
-                      <Text>{comment.content}</Text>
+                <View className="p-4 border-t border-gray-100">
+                  <View className="flex-row justify-between items-center mb-3">
+                    <View className="flex-row items-center space-x-5">
+                      <View className="flex-row items-center">
+                        <TouchableOpacity className="p-1">
+                          <Feather name="heart" size={26} color="black" />
+                        </TouchableOpacity>
+                        <Text className="text-black font-semibold text-sm ml-2">
+                          {postData?.likesCount ? postData.likesCount.toLocaleString() + " likes" : "0 likes"}
+                        </Text>
+                      </View>
+                      <TouchableOpacity className="p-1">
+                        <Feather name="message-circle" size={26} color="black" />
+                      </TouchableOpacity>
+                      <TouchableOpacity className="p-1" onPress={handleShare}>
+                        <Feather name="send" size={26} color="black" />
+                      </TouchableOpacity>
                     </View>
-                    <Text className="text-gray-400 text-xs">
-                      {formatTimeAgo(new Date(comment.created_at))}
-                    </Text>
-                  </View>
-                ))}
-              </ScrollView>
-
-              {/* Actions */}
-              <View className="p-4 border-t border-gray-200">
-                <View className="flex-row justify-between mb-4">
-                  <View className="flex-row space-x-4">
-                    <TouchableOpacity>
-                      <Feather name="heart" size={24} color="black" />
-                    </TouchableOpacity>
-                    <TouchableOpacity>
-                      <Feather name="message-circle" size={24} color="black" />
-                    </TouchableOpacity>
-                    <TouchableOpacity>
-                      <Feather name="send" size={24} color="black" />
+                    <TouchableOpacity className="p-1">
+                      <Feather name="bookmark" size={26} color="black" />
                     </TouchableOpacity>
                   </View>
-                  <TouchableOpacity>
-                    <Feather name="bookmark" size={24} color="black" />
-                  </TouchableOpacity>
                 </View>
-
-                {/* Likes */}
-                <Text className="text-black font-semibold mb-2">
-                  {postData?.likesCount.toLocaleString() || 0} likes
-                </Text>
               </View>
-            </View>
-          </View>
+            )}
+          </Animated.View>
 
-          {/* Full-Screen Image */}
           {fullScreen && (
             <Pressable 
-              className="absolute inset-0 bg-black justify-center items-center"
+              className="absolute inset-0 bg-black/90 justify-center items-center"
               onPress={() => setFullScreen(false)}
             >
               <Image
@@ -452,7 +487,6 @@ const ViewImage: React.FC<ViewImageProps> = ({
             </Pressable>
           )}
 
-          {/* Options Modal - Updated with animation */}
           <View className="absolute inset-0" pointerEvents={showOptions ? 'auto' : 'none'}>
             <Pressable 
               className="flex-1"
@@ -474,16 +508,15 @@ const ViewImage: React.FC<ViewImageProps> = ({
                 right: 0
               }}
             >
-              <View className="w-12 h-1 bg-gray-300 rounded-full mx-auto my-3" />
+              <View className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-3" />
               
-              {/* Show delete option only if current user is the post owner */}
               {postData?.username === currentUsername && (
                 <TouchableOpacity 
                   onPress={() => {
                     setShowOptions(false);
                     handleDeletePost();
                   }}
-                  className="flex-row items-center px-6 py-4 border-b border-gray-200"
+                  className="flex-row items-center px-6 py-4 border-b border-gray-100"
                 >
                   <Feather name="trash-2" size={24} color="red" />
                   <Text className="ml-4 text-red-500 font-semibold">Delete Post</Text>
@@ -495,10 +528,10 @@ const ViewImage: React.FC<ViewImageProps> = ({
                   setShowOptions(false);
                   handleDownload();
                 }}
-                className="flex-row items-center px-6 py-4 border-b border-gray-200"
+                className="flex-row items-center px-6 py-4 border-b border-gray-100"
               >
                 <Feather name="download" size={24} color="black" />
-                <Text className="ml-4">Save to Gallery</Text>
+                <Text className="ml-4 font-medium">Save to Gallery</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 
@@ -506,17 +539,17 @@ const ViewImage: React.FC<ViewImageProps> = ({
                   setShowOptions(false);
                   handleShare();
                 }}
-                className="flex-row items-center px-6 py-4 border-b border-gray-200"
+                className="flex-row items-center px-6 py-4 border-b border-gray-100"
               >
                 <Feather name="share-2" size={24} color="black" />
-                <Text className="ml-4">Share</Text>
+                <Text className="ml-4 font-medium">Share</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 
                 onPress={() => setShowOptions(false)}
-                className="px-6 py-4 mb-6"
+                className="px-6 py-4 mb-2"
               >
-                <Text className="text-center text-gray-500">Cancel</Text>
+                <Text className="text-center text-gray-500 font-medium">Cancel</Text>
               </TouchableOpacity>
             </Animated.View>
           </View>

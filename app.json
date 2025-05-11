@@ -41,7 +41,15 @@
       [
         "expo-av",
         {
-          "microphonePermission": "$(PRODUCT_NAME) would like to use your microphone for voice recording."
+          "microphonePermission": "$(Pixelfy) would like to use your microphone for voice recording."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow $(Pixelfy) to access your photos.",
+          "savePhotosPermission": "Allow $(Pixelfy) to save photos.",
+          "isAccessMediaLocationEnabled": true
         }
       ],
       "expo-font"

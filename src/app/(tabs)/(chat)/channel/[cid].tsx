@@ -33,17 +33,43 @@ const CustomMessage = () => {
           className="w-10 h-10 rounded-full mr-3"
         />
       )}
-      <View className={`max-w-[80%] rounded-2xl p-4 ${
+      <View className={`max-w-[80%] rounded-2xl ${
         isMyMessage ? 'bg-blue-500' : 'bg-gray-100'
-      } shadow-sm`}>
+      } shadow-sm p-2`}>
         {!isMyMessage && (
           <Text className="text-sm font-semibold text-gray-800 mb-1">
             {message.user?.name}
           </Text>
         )}
-        <Text className={`text-base ${isMyMessage ? 'text-white' : 'text-gray-800'}`}>
-          {message.text}
-        </Text>
+        
+        {/* Display text if present */}
+        {message.text && (
+          <Text className={`text-base ${isMyMessage ? 'text-white' : 'text-gray-800'}`}>
+            {message.text}
+          </Text>
+        )}
+        
+        {/* Display image attachments */}
+        {message.attachments?.map((attachment, index) => {
+          if (attachment.type === 'image' || attachment.image_url) {
+            return (
+              <Image 
+                key={`${message.id}-${index}`}
+                source={{ uri: attachment.image_url || attachment.asset_url }}
+                className="w-full h-auto mt-2 rounded-lg"
+                style={{ maxHeight: 200, aspectRatio: 1 }} // Maintain aspect ratio
+                resizeMode="contain" // Maintain aspect ratio
+              />
+            );
+          }
+          if (attachment.type === 'giphy') {
+            return (
+              <Giphy key={`${message.id}-${index}`} attachment={attachment} />
+            );
+          }
+          return null;
+        })}
+        
         <View className="flex flex-row items-center justify-end mt-1">
           <Text className={`text-xs ${
             isMyMessage ? 'text-blue-200' : 'text-gray-500'
@@ -136,7 +162,7 @@ const CustomMessageInput = ({ handleImageUpload }) => (
           backgroundColor: '#f3f4f6',
           borderRadius: 25,
           paddingHorizontal: 20,
-          paddingVertical: 12,
+          paddingVertical: 10,
           fontSize: 16,
         }
       }}
@@ -148,8 +174,7 @@ const CustomMessageInput = ({ handleImageUpload }) => (
       }}
       sendButtonStyle={{
         backgroundColor: '#3b82f6',
-        borderRadius: 20,
-        padding: 10,
+        borderRadius: 10,
         marginLeft: 8,
       }}
       ImageUploadIcon={() => (
