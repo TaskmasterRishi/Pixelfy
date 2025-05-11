@@ -97,22 +97,32 @@ const CustomMessage = () => {
 const CustomMessageList = () => {
   return (
     <MessageList 
-      MessageSimple={CustomMessage}
-      styles={{
-        container: {
-          backgroundColor: '#ffffff',
-          paddingHorizontal: 16,
-        },
-        messageContainer: {
-          marginBottom: 12,
-        },
-      }}
     />
   );
 };
 
 // Enhanced Header Component with proper online status
-const CustomHeader = ({ otherUser, router, channel }) => {
+interface CustomHeaderProps {
+  otherUser: {
+    id: string;
+    image?: string;
+    name?: string;
+  };
+  router: {
+    back: () => void;
+  };
+  channel: {
+    state: {
+      members: Record<string, {
+        user?: {
+          online: boolean;
+        };
+      }>;
+    };
+  };
+}
+
+const CustomHeader: React.FC<CustomHeaderProps> = ({ otherUser, router, channel }) => {
   const [isOnline, setIsOnline] = useState(false);
 
   useEffect(() => {
@@ -153,41 +163,9 @@ const CustomHeader = ({ otherUser, router, channel }) => {
 };
 
 // Enhanced Message Input Component
-const CustomMessageInput = ({ handleImageUpload }) => (
-  <View className="bg-white px-4 py-2 border-t border-gray-100">
-    <MessageInput 
-      additionalTextInputProps={{
-        placeholder: "Type a message...",
-        style: {
-          backgroundColor: '#f3f4f6',
-          borderRadius: 25,
-          paddingHorizontal: 20,
-          paddingVertical: 10,
-          fontSize: 16,
-        }
-      }}
-      fileUploadsEnabled={true}
-      imageUploadsEnabled={true}
-      sendImageAsync={true}
-      additionalTouchableProps={{
-        activeOpacity: 0.7,
-      }}
-      sendButtonStyle={{
-        backgroundColor: '#3b82f6',
-        borderRadius: 10,
-        marginLeft: 8,
-      }}
-      ImageUploadIcon={() => (
-        <TouchableOpacity 
-          onPress={handleImageUpload}
-          className="p-2 rounded-full bg-gray-100 active:bg-gray-200"
-        >
-          <Ionicons name="image-outline" size={24} color="#3b82f6" />
-        </TouchableOpacity>
-      )}
-    />
-  </View>
-);
+interface CustomMessageInputProps {
+  handleImageUpload: () => void;
+}
 
 export default function ChannelScreen() {
   const [channel, setChannel] = useState<ChannelType | null>(null);
@@ -224,7 +202,7 @@ export default function ChannelScreen() {
   }
 
   // Get other members from the channel
-  const otherMembers = Object.values(channel.state.members).filter(member => member.user_id !== user.id);
+  const otherMembers = Object.values(channel.state.members).filter(member => member.user_id !== user?.id);
   const otherUser = otherMembers[0]?.user;
 
   const customEmojiSearchIndex = {
@@ -275,7 +253,7 @@ export default function ChannelScreen() {
                 type: 'image',
                 asset_url: file.uri,
                 image_url: file.uri,
-                file_size: file.size,
+                file_size: image.fileSize || 0, // Use image.fileSize if available, otherwise default to 0
               }
             ]
           };
@@ -293,83 +271,7 @@ export default function ChannelScreen() {
   };
 
   return (
-    <Channel 
-      channel={channel} 
-      audioRecordingEnabled
-      emojiSearchIndex={customEmojiSearchIndex}
-      AutoCompleteSuggestionHeader={({ queryText, triggerType }) => {
-        if (triggerType === "command") {
-          return <Text className="text-gray-600 px-4 py-2">Available Commands</Text>;
-        } else if (triggerType === "emoji") {
-          return <Text className="text-gray-600 px-4 py-2">Emoji Suggestions</Text>;
-        } else {
-          return <AutoCompleteSuggestionHeader queryText={queryText} triggerType={triggerType} />;
-        }
-      }}
-      AutoCompleteSuggestionItem={({ itemProps, triggerType }) => {
-        if (triggerType === "command") {
-          return (
-            <View className="px-4 py-2">
-              <Text className="font-semibold">{itemProps.name}</Text>
-              <Text className="text-gray-500">{itemProps.args}</Text>
-            </View>
-          );
-        } else if (triggerType === "mention") {
-          return (
-            <View className="flex-row items-center px-4 py-2">
-              <Image
-                source={{ uri: itemProps.image }}
-                className="w-8 h-8 rounded-full mr-3"
-              />
-              <Text className="font-medium">{itemProps.name}</Text>
-            </View>
-          );
-        } else {
-          return <AutoCompleteSuggestionItem itemProps={itemProps} triggerType={triggerType} />;
-        }
-      }}
-      AutoCompleteSuggestionList={({ data, onSelect, queryText, triggerType }) => {
-        if (triggerType === "emoji") {
-          return (
-            <FlatList
-              data={data}
-              keyboardShouldPersistTaps="always"
-              ListHeaderComponent={
-                <AutoCompleteSuggestionHeader
-                  queryText={queryText}
-                  triggerType={triggerType}
-                />
-              }
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  className="px-4 py-2"
-                  onPress={() => onSelect(item)}
-                >
-                  <Text className="text-2xl">{item.unicode}</Text>
-                  <Text className="text-gray-500">{item.name}</Text>
-                </TouchableOpacity>
-              )}
-            />
-          );
-        } else {
-          return (
-            <View className="bg-white rounded-lg shadow-sm">
-              <AutoCompleteSuggestionHeader
-                queryText={queryText}
-                triggerType={triggerType}
-              />
-              {data.map((item) => (
-                <AutoCompleteSuggestionItem
-                  itemProps={item}
-                  key={item.name}
-                  triggerType={triggerType}
-                />
-              ))}
-            </View>
-          );
-        }
-      }}
-    >
+    <Channel channel={channel}>
       <Stack.Screen
         options={{
           title: otherUser?.name || 'Chat',
@@ -377,13 +279,35 @@ export default function ChannelScreen() {
         }}
       />
       
-      <CustomHeader otherUser={otherUser} router={router} channel={channel} />
+      {/* Custom Header (kept as requested) */}
+      <View className="flex flex-row items-center px-4 py-3 bg-white border-b border-gray-100 shadow-sm">
+        <TouchableOpacity 
+          onPress={() => router.back()} 
+          className="p-2 rounded-full bg-gray-50 active:bg-gray-100"
+        >
+          <Ionicons name="arrow-back" size={20} color="#4b5563" />
+        </TouchableOpacity>
+        {otherUser?.image ? (
+          <Image
+            source={{ uri: otherUser.image as string }}
+            className="w-10 h-10 rounded-full ml-3 mr-3 border-2 border-white"
+          />
+        ) : (
+          <View className="w-10 h-10 rounded-full bg-gray-100 ml-3 mr-3 items-center justify-center border-2 border-white">
+            <Ionicons name="person" size={20} color="#9ca3af" />
+          </View>
+        )}
+        <View>
+          <Text className="text-lg font-semibold text-gray-800">{otherUser?.name || otherUser?.id}</Text>
+          <Text className="text-sm text-gray-500">
+            {otherUser?.online ? 'Online' : 'Offline'}
+          </Text>
+        </View>
+      </View>
       
-      <CustomMessageList />
-      
-      <SafeAreaView edges={["bottom"]}>
-        <CustomMessageInput handleImageUpload={handleImageUpload} />
-      </SafeAreaView>
+      {/* Default Message List and Input (no customizations) */}
+      <MessageList />
+      <MessageInput />
     </Channel>
   );
 }

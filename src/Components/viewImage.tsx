@@ -201,9 +201,9 @@ const ViewImage: React.FC<ViewImageProps> = ({
         if (likesResult.error) throw likesResult.error;
         if (commentsResult.error) throw commentsResult.error;
 
-        const typedPostData = postResult.data as PostDataFromSupabase;
+        const typedPostData = postResult.data as unknown as PostDataFromSupabase;
         const likesCount = likesResult.count || 0;
-        const typedCommentsData = commentsResult.data as CommentDataFromSupabase[];
+        const typedCommentsData = commentsResult.data as unknown as CommentDataFromSupabase[];
 
         setPostData({
           username: typedPostData.users?.username || 'Unknown',
