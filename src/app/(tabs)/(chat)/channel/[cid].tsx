@@ -347,7 +347,7 @@ const CustomMessageActionsList = (props: MessageActionListProps) => {
 
 const CustomMessageReactions = (props: MessageUserReactionsProps) => {
   const { reactions: propReactions, selectedReaction } = props;
-  const { supportedReactions, MessageUserReactionsItem } = useMessagesContext();
+  const { supportedReactions } = useMessagesContext();
   const { message } = useMessageContext();
   const { loadNextPage, reactions: fetchedReactions } = useFetchReactions({
     message,
@@ -357,6 +357,20 @@ const CustomMessageReactions = (props: MessageUserReactionsProps) => {
     },
   });
   const { t } = useTranslationContext();
+  
+  // Helper function to convert reaction type to emoji - same as in CustomMessage
+  const getReactionEmoji = (type: string) => {
+    const reactions: {[key: string]: string} = {
+      love: "❤️", 
+      like: "👍", 
+      haha: "😂", 
+      wow: "😮", 
+      sad: "😢", 
+      angry: "😠",
+    };
+    
+    return reactions[type] || "👍";
+  };
   
   const reactions = useMemo(
     () =>
@@ -371,12 +385,25 @@ const CustomMessageReactions = (props: MessageUserReactionsProps) => {
   );
 
   const renderItem = ({ item }: { item: Reaction }) => (
-    <View className="w-1/4 py-2">
-      <MessageUserReactionsItem
-        MessageUserReactionsAvatar={MessageUserReactionsAvatar}
-        reaction={item}
-        supportedReactions={supportedReactions ?? []}
-      />
+    <View className="flex-row items-center justify-center p-2">
+      <View className="items-center mr-2">
+        {item.image ? (
+          <Image 
+            source={{ uri: item.image }} 
+            className="w-8 h-8 rounded-full"
+          />
+        ) : (
+          <View className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center">
+            <Text className="text-gray-500 font-bold">
+              {item.name?.[0] || "?"}
+            </Text>
+          </View>
+        )}
+      </View>
+      <View className="items-center">
+        <Text className="text-2xl">{getReactionEmoji(item.type)}</Text>
+        <Text className="text-xs text-gray-500 mt-1">{item.name}</Text>
+      </View>
     </View>
   );
 
@@ -387,18 +414,80 @@ const CustomMessageReactions = (props: MessageUserReactionsProps) => {
   );
 
   return (
-    <View className="bg-white rounded-lg p-4 shadow-md w-11/12 max-w-md max-h-[200px]">
+    <View className="bg-white rounded-lg p-4 shadow-md w-11/12 max-w-md max-h-[300px]">
       <FlatList
         accessibilityLabel="reaction-flat-list"
-        columnWrapperStyle={{ justifyContent: 'space-evenly' }}
-        contentContainerStyle={{ justifyContent: 'center' }}
+        contentContainerStyle={{ paddingHorizontal: 8 }}
         data={reactions}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => `${item.id}-${item.type}`}
         ListHeaderComponent={renderHeader}
-        numColumns={4}
+        numColumns={2}
         onEndReached={loadNextPage}
         renderItem={renderItem}
       />
+    </View>
+  );
+};
+
+// Updated MessageReactionPicker component to use the proper reaction types
+export const CustomMessageReactionPicker = (props: any) => {
+  const { dismissOverlay, ownReactionTypes = [] } = props;
+  const { message } = useMessageContext();
+  const { channel } = useChannelContext();
+  
+  // Define direct mapping of reaction types for simplicity
+  const reactionTypes = ['love', 'like', 'haha', 'wow', 'sad', 'angry'];
+  
+  // Helper function to convert reaction type to emoji
+  const getReactionEmoji = (type: string) => {
+    const reactions: {[key: string]: string} = {
+      love: "❤️", 
+      like: "👍", 
+      haha: "😂", 
+      wow: "😮", 
+      sad: "😢", 
+      angry: "😠",
+    };
+    
+    return reactions[type] || "👍";
+  };
+  
+  // Direct function to send reaction using the channel API
+  const sendReaction = async (type: string) => {
+    try {
+      console.log("Sending reaction directly via channel:", type, message.id);
+      // Check if user already has this reaction
+      const hasReaction = message.own_reactions?.some(r => r.type === type);
+      
+      if (hasReaction) {
+        // Remove reaction if it exists
+        await channel.deleteReaction(message.id, type);
+      } else {
+        // Add reaction
+        await channel.sendReaction(message.id, { type });
+      }
+      dismissOverlay();
+    } catch (error) {
+      console.error("Reaction error:", error);
+    }
+  };
+  
+  return (
+    <View className="bg-white rounded-full px-3 py-2 flex-row shadow-md z-50" 
+          style={{ position: 'absolute', top: '15%' }}>
+      {reactionTypes.map((type) => {
+        const isOwn = ownReactionTypes.includes(type);
+        return (
+          <TouchableOpacity
+            key={type}
+            onPress={() => sendReaction(type)}
+            className={`px-3 py-2 mx-1 ${isOwn ? "bg-blue-100 rounded-full" : ""}`}
+            activeOpacity={0.7}
+          >
+            <Text className="text-2xl">{getReactionEmoji(type)}</Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 };
@@ -451,148 +540,157 @@ export const CustomMessageMenu = (props: MessageMenuProps) => {
             style={{ flex: 1 }}
           >
             <View className="flex-1 bg-black/70 justify-center items-center">
-              <MessageReactionPicker
+              <CustomMessageReactionPicker
                 dismissOverlay={dismissOverlay}
-                handleReaction={handleReaction}
                 ownReactionTypes={own_reactions}
               />
               
-              <Animated.View
-                onLayout={({
-                  nativeEvent: {
-                    layout: { height: layoutHeight, width: layoutWidth, x, y },
-                  },
-                }) => {
-                  messageLayout.value = {
-                    x: alignment === "left" ? x + layoutWidth : x,
-                    y,
-                  };
-                  messageWidth.value = layoutWidth;
-                  messageHeight.value = layoutHeight;
-                }}
-                className={`items-${alignment === "left" ? "start" : "end"} flex-row`}
-              >
-                {alignment === "left" && MessageAvatar && (
-                  <MessageAvatar
-                    {...{ alignment, message, showAvatar: true }}
-                  />
+              <View style={{ width: '100%', flexDirection: 'column', alignItems: 'center' }}>
+                {/* Position reactions above the message */}
+                {showMessageReactions && (
+                  <View style={{ width: '100%', alignItems: 'center', marginBottom: 10, zIndex: 2 }}>
+                    <CustomMessageReactions
+                      message={message}
+                      MessageUserReactionsAvatar={MessageUserReactionsAvatar}
+                      MessageUserReactionsItem={MessageUserReactionsItem}
+                      selectedReaction={selectedReaction}
+                    />
+                  </View>
                 )}
                 
-                <View
-                  className={`
-                    rounded-tl-2xl rounded-tr-2xl overflow-hidden my-2
-                    ${onlyEmojis && !message.quoted_message ? "" : "border border-gray-200"}
-                    ${otherAttachments?.length && otherAttachments[0].type === "giphy" && !message.quoted_message 
-                      ? "" 
-                      : otherAttachments?.length ? "bg-blue-50" : 
-                        alignment === "left" ? "bg-white" : "bg-gray-100"}
-                    ${(groupStyle === "left_bottom" || groupStyle === "left_single") && 
-                      (!hasThreadReplies || threadList) ? "rounded-bl-sm" : "rounded-bl-2xl"}
-                    ${(groupStyle === "right_bottom" || groupStyle === "right_single") && 
-                      (!hasThreadReplies || threadList) ? "rounded-br-sm" : "rounded-br-2xl"}
-                  `}
-                  style={
-                    (onlyEmojis && !message.quoted_message) || otherAttachments?.length
-                      ? { borderWidth: 0 }
-                      : {}
-                  }
-                >
-                  {messageContentOrder.map(
-                    (messageContentType, messageContentOrderIndex) => {
-                      switch (messageContentType) {
-                        case "quoted_reply":
-                          return (
-                            message.quoted_message && (
-                              <View
-                                key={`quoted_reply_${messageContentOrderIndex}`}
-                                className="flex-row px-2 pt-2"
-                              >
-                                <Reply
-                                  quotedMessage={
-                                    message.quoted_message as ReplyProps["quotedMessage"]
-                                  }
-                                />
-                              </View>
-                            )
-                          );
-                        case "gallery":
-                          return (
-                            <Gallery
-                              alignment={alignment}
-                              groupStyles={groupStyles}
-                              hasThreadReplies={!!message?.reply_count}
-                              images={images}
-                              key={`gallery_${messageContentOrderIndex}`}
-                              message={message}
-                              threadList={threadList}
-                              videos={videos}
-                            />
-                          );
-                        case "files":
-                          return (
-                            <FileAttachmentGroup
-                              files={files}
-                              key={`file_attachment_group_${messageContentOrderIndex}`}
-                              messageId={message.id}
-                            />
-                          );
-                        case "poll":
-                          const pollId = message.poll_id;
-                          const poll = pollId && client.polls.fromState(pollId);
-                          return poll ? (
-                            <Poll message={message} poll={poll} />
-                          ) : null;
-                        case "ai_text": {
-                          return isMessageAIGenerated?.(message) ? (
-                            <StreamingMessageView
-                              key={`ai_message_text_container_${messageContentOrderIndex}`}
-                              message={message}
-                            />
-                          ) : null;
-                        }
-                        case "attachments":
-                          return otherAttachments?.map(
-                            (attachment, attachmentIndex) => (
-                              <Attachment
-                                attachment={attachment}
-                                key={`${message.id}-${attachmentIndex}`}
-                              />
-                            ),
-                          );
-                        case "text":
-                        default:
-                          return (otherAttachments?.length &&
-                            otherAttachments[0].actions) ||
-                            isMessageAIGenerated?.(message) ? null : (
-                            <MessageTextContainer
-                              key={`message_text_container_${messageContentOrderIndex}`}
-                              messageOverlay
-                              messageTextNumberOfLines={
-                                messageTextNumberOfLines
-                              }
-                              onlyEmojis={onlyEmojis}
-                            />
-                          );
-                      }
+                <Animated.View
+                  onLayout={({
+                    nativeEvent: {
+                      layout: { height: layoutHeight, width: layoutWidth, x, y },
                     },
+                  }) => {
+                    messageLayout.value = {
+                      x: alignment === "left" ? x + layoutWidth : x,
+                      y,
+                    };
+                    messageWidth.value = layoutWidth;
+                    messageHeight.value = layoutHeight;
+                  }}
+                  className={`items-${alignment === "left" ? "start" : "end"} flex-row`}
+                >
+                  {alignment === "left" && MessageAvatar && (
+                    <MessageAvatar
+                      {...{ alignment, message, showAvatar: true }}
+                    />
                   )}
-                </View>
-              </Animated.View>
-              
-              {showMessageReactions ? (
-                <CustomMessageReactions
-                  message={message}
-                  MessageUserReactionsAvatar={MessageUserReactionsAvatar}
-                  MessageUserReactionsItem={MessageUserReactionsItem}
-                  selectedReaction={selectedReaction}
-                />
-              ) : (
-                <CustomMessageActionsList
-                  dismissOverlay={dismissOverlay}
-                  MessageActionListItem={MessageActionListItem}
-                  messageActions={messageActions}
-                />
-              )}
+                  
+                  <View
+                    className={`
+                      rounded-tl-2xl rounded-tr-2xl overflow-hidden my-2
+                      ${onlyEmojis && !message.quoted_message ? "" : "border border-gray-200"}
+                      ${otherAttachments?.length && otherAttachments[0].type === "giphy" && !message.quoted_message 
+                        ? "" 
+                        : otherAttachments?.length ? "bg-blue-50" : 
+                          alignment === "left" ? "bg-white" : "bg-gray-100"}
+                      ${(groupStyle === "left_bottom" || groupStyle === "left_single") && 
+                        (!hasThreadReplies || threadList) ? "rounded-bl-sm" : "rounded-bl-2xl"}
+                      ${(groupStyle === "right_bottom" || groupStyle === "right_single") && 
+                        (!hasThreadReplies || threadList) ? "rounded-br-sm" : "rounded-br-2xl"}
+                    `}
+                    style={
+                      (onlyEmojis && !message.quoted_message) || otherAttachments?.length
+                        ? { borderWidth: 0 }
+                        : {}
+                    }
+                  >
+                    {messageContentOrder.map(
+                      (messageContentType, messageContentOrderIndex) => {
+                        switch (messageContentType) {
+                          case "quoted_reply":
+                            return (
+                              message.quoted_message && (
+                                <View
+                                  key={`quoted_reply_${messageContentOrderIndex}`}
+                                  className="flex-row px-2 pt-2"
+                                >
+                                  <Reply
+                                    quotedMessage={
+                                      message.quoted_message as ReplyProps["quotedMessage"]
+                                    }
+                                  />
+                                </View>
+                              )
+                            );
+                          case "gallery":
+                            return (
+                              <Gallery
+                                alignment={alignment}
+                                groupStyles={groupStyles}
+                                hasThreadReplies={!!message?.reply_count}
+                                images={images}
+                                key={`gallery_${messageContentOrderIndex}`}
+                                message={message}
+                                threadList={threadList}
+                                videos={videos}
+                              />
+                            );
+                          case "files":
+                            return (
+                              <FileAttachmentGroup
+                                files={files}
+                                key={`file_attachment_group_${messageContentOrderIndex}`}
+                                messageId={message.id}
+                              />
+                            );
+                          case "poll":
+                            const pollId = message.poll_id;
+                            const poll = pollId && client.polls.fromState(pollId);
+                            return poll ? (
+                              <Poll message={message} poll={poll} />
+                            ) : null;
+                          case "ai_text": {
+                            return isMessageAIGenerated?.(message) ? (
+                              <StreamingMessageView
+                                key={`ai_message_text_container_${messageContentOrderIndex}`}
+                                message={message}
+                              />
+                            ) : null;
+                          }
+                          case "attachments":
+                            return otherAttachments?.map(
+                              (attachment, attachmentIndex) => (
+                                <Attachment
+                                  attachment={attachment}
+                                  key={`${message.id}-${attachmentIndex}`}
+                                />
+                              ),
+                            );
+                          case "text":
+                          default:
+                            return (otherAttachments?.length &&
+                              otherAttachments[0].actions) ||
+                              isMessageAIGenerated?.(message) ? null : (
+                              <MessageTextContainer
+                                key={`message_text_container_${messageContentOrderIndex}`}
+                                messageOverlay
+                                messageTextNumberOfLines={
+                                  messageTextNumberOfLines
+                                }
+                                onlyEmojis={onlyEmojis}
+                              />
+                            );
+                        }
+                      },
+                    )}
+                  </View>
+                </Animated.View>
+                
+                {/* Position action list below the message */}
+                {!showMessageReactions && (
+                  <View style={{ width: '100%', alignItems: 'center', marginTop: 10, zIndex: 2 }}>
+                    <CustomMessageActionsList
+                      dismissOverlay={dismissOverlay}
+                      MessageActionListItem={MessageActionListItem}
+                      messageActions={messageActions}
+                    />
+                  </View>
+                )}
+              </View>
             </View>
           </TouchableWithoutFeedback>
         </GestureHandlerRootView>
@@ -603,7 +701,7 @@ export const CustomMessageMenu = (props: MessageMenuProps) => {
 
 const CustomMessage = () => {
   const { message, isMyMessage, groupStyles, onLongPress } = useMessageContext();
-  const { handleReaction } = useMessagesContext();
+  const { handleReaction, channel } = useMessagesContext();
   const [visibleImage, setVisibleImage] = useState<string | null>(null);
   const scaleAnim = useSharedValue(0);
   const opacityAnim = useSharedValue(0);
@@ -655,7 +753,7 @@ const CustomMessage = () => {
     }
   };
 
-  // Display message reactions
+  // Display message reactions with completely transparent background
   const renderReactions = () => {
     if (!message.latest_reactions || message.latest_reactions.length === 0) return null;
     
@@ -675,36 +773,69 @@ const CustomMessage = () => {
       }
     });
     
+    // Helper function to convert reaction type to emoji
+    const getReactionEmoji = (type: string) => {
+      const reactions: {[key: string]: string} = {
+        love: "❤️", 
+        like: "👍", 
+        haha: "😂", 
+        wow: "😮", 
+        sad: "😢", 
+        angry: "😠",
+      };
+      
+      return reactions[type] || "👍";
+    };
+    
     return (
-      <View className={`flex-row ${isMyMessage ? "justify-end" : "justify-start"} mx-4 my-1`}>
-        <View className="flex-row bg-gray-100 rounded-full px-2 py-1">
+      <View 
+        className={`flex-row ${isMyMessage ? "justify-end" : "justify-start"}`} 
+        style={{ 
+          position: 'absolute', 
+          top: -28,
+          left: isMyMessage ? undefined : 46, 
+          right: isMyMessage ? 0 : undefined,
+          zIndex: 1,
+          paddingHorizontal: 16,
+          backgroundColor: 'transparent',
+        }}
+      >
+        <View 
+          style={{ 
+            backgroundColor: 'transparent',
+            flexDirection: 'row',
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+          }}
+        >
           {Object.entries(reactionsByType).map(([type, data]) => (
             <TouchableOpacity 
               key={type}
-              onPress={() => handleReaction?.(message, type)}
-              className={`flex-row items-center mx-1 ${data.own ? "bg-blue-100 rounded-lg px-1" : ""}`}
+              onPress={() => {
+                if (channel) {
+                  const hasReaction = message.own_reactions?.some(r => r.type === type);
+                  if (hasReaction) {
+                    channel.deleteReaction(message.id, type);
+                  } else {
+                    channel.sendReaction(message.id, { type });
+                  }
+                }
+              }}
+              style={{ 
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginHorizontal: 2,
+                backgroundColor: 'transparent', // Force transparent for all
+                paddingHorizontal: 2,
+              }}
             >
-              <Text className="text-base mr-1">{getReactionEmoji(type)}</Text>
-              <Text className="text-xs text-gray-600">{data.count}</Text>
+              <Text style={{ fontSize: 18, marginRight: 4 }}>{getReactionEmoji(type)}</Text>
+              <Text style={{ fontSize: 10, color: data.own ? '#2563eb' : '#4b5563' }}>{data.count}</Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
     );
-  };
-  
-  // Helper function to convert reaction type to emoji
-  const getReactionEmoji = (type: string) => {
-    const reactions: {[key: string]: string} = {
-      love: "❤️", 
-      like: "👍", 
-      haha: "😂", 
-      wow: "😮", 
-      sad: "😢", 
-      angry: "😠",
-    };
-    
-    return reactions[type] || "👍";
   };
 
   return (
@@ -712,9 +843,13 @@ const CustomMessage = () => {
       <View className={`flex-row px-4 ${isMyMessage ? "justify-end" : "justify-start"}`}
         style={{ 
           marginBottom: shouldGroupWithPrevious ? 2 : 8,
-          marginTop: shouldGroupWithPrevious ? 0 : 2 
+          marginTop: shouldGroupWithPrevious ? 0 : 8, // Increased top margin to make room for reactions
+          position: 'relative', // Add this to position reactions correctly
         }}
       >
+        {/* Render reactions first so they appear on top */}
+        {renderReactions()}
+        
         {/* Avatar or spacing placeholder */}
         {!isMyMessage && (
           <View className="w-10 mr-2 items-start justify-start">
@@ -786,9 +921,6 @@ const CustomMessage = () => {
         </View>
       </View>
 
-      {/* Render reactions */}
-      {renderReactions()}
-
       <Modal visible={!!visibleImage} transparent animationType="none">
         <Pressable
           className="flex-1 bg-black/70 items-center justify-center"
@@ -818,6 +950,10 @@ export default function ChannelScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [channel, setChannel] = useState<ChannelType | null>(null);
+
+  // This is the issue - we need to use the format that Stream Chat expects
+  // Define the reaction types as plain strings, not objects
+  const reactionTypes = ['love', 'like', 'haha', 'wow', 'sad', 'angry'];
 
   useEffect(() => {
     const fetchChannel = async () => {
