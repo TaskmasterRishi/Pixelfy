@@ -45,6 +45,13 @@
         }
       ],
       [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": true,
+          "supportsPictureInPicture": true
+        }
+      ],
+      [
         "expo-media-library",
         {
           "photosPermission": "Allow $(Pixelfy) to access your photos.",

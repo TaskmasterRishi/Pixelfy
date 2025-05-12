@@ -9,13 +9,13 @@ import {
   Modal,
   Pressable,
   BackHandler,
+  StyleSheet,
 } from "react-native";
 import {
   Channel,
   MessageList,
   MessageInput,
   useMessageContext,
-  Giphy,
 } from "stream-chat-expo";
 import { StreamChat, Channel as ChannelType } from "stream-chat";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
@@ -29,14 +29,14 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useFocusEffect } from "@react-navigation/native";
-import { Video } from "expo-av";
+import { useVideoPlayer, VideoView } from 'expo-video';
 
 const client = StreamChat.getInstance("cxc6zzq7e93f");
 
 const CustomMessage = () => {
   const { message, isMyMessage } = useMessageContext();
   const [visibleImage, setVisibleImage] = useState<string | null>(null);
-  const [imageDimensions, setImageDimensions] = useState({ width: 200, height: 200 });
+  const [imageDimensions, setImageDimensions] = useState({ width: 250, height: 250 });
   const scaleAnim = useSharedValue(0);
   const opacityAnim = useSharedValue(0);
 
@@ -45,9 +45,9 @@ const CustomMessage = () => {
       const backAction = () => {
         if (visibleImage) {
           setVisibleImage(null);
-          return true; // Prevent default back behavior
+          return true;
         }
-        return false; // Allow default back behavior
+        return false;
       };
 
       const backHandler = BackHandler.addEventListener(
@@ -55,9 +55,7 @@ const CustomMessage = () => {
         backAction
       );
 
-      return () => {
-        backHandler.remove(); // Clean up the event listener
-      };
+      return () => backHandler.remove();
     }, [visibleImage])
   );
 
@@ -78,11 +76,7 @@ const CustomMessage = () => {
 
   return (
     <>
-      <View
-        className={`flex-row mb-3 px-4 ${
-          isMyMessage ? "justify-end" : "justify-start"
-        }`}
-      >
+      <View className={`flex-row mb-3 px-4 ${isMyMessage ? "justify-end" : "justify-start"}`}>
         {!isMyMessage && (
           <Image
             source={{ uri: message.user?.image }}
@@ -90,89 +84,152 @@ const CustomMessage = () => {
           />
         )}
         <View className="max-w-[75%]">
-          <View
-            className={`rounded-2xl  ${
-              isMyMessage ? "bg-blue-500" : "bg-gray-100"
-            }`}
-          >
-            {message.text && (
-              <Text
-                className={`text-base px-4 py-2 ${
-                  isMyMessage ? "text-white" : "text-gray-900"
-                }`}
-              >
+          {message.text && (
+            <View
+              className={`${isMyMessage ? "bg-blue-500" : "bg-gray-100"}`}
+              style={[
+                {
+                  borderTopLeftRadius: 16,
+                  borderTopRightRadius: 16,
+                  overflow: "hidden",
+                },
+                isMyMessage 
+                  ? { borderBottomLeftRadius: 16 }
+                  : { borderBottomRightRadius: 16 }
+              ]}
+            >
+              <Text className={`text-base px-4 py-2 ${isMyMessage ? "text-white" : "text-gray-900"}`}>
                 {message.text}
               </Text>
-            )}
+            </View>
+          )}
+          <View style={{ backgroundColor: "transparent" }}>
             {message.attachments?.map((attachment, i) => {
               const imageUrl = attachment.image_url || attachment.asset_url;
 
-              // Handle image attachments
               if (attachment.type === "image" || imageUrl?.match(/\.(jpeg|jpg|png|gif)$/i)) {
                 useEffect(() => {
                   if (imageUrl) {
                     Image.getSize(imageUrl, (width, height) => {
-                      const ratio = height / width;
-                      setImageDimensions({ width: 200, height: 200 * ratio });
+                      setImageDimensions({ width: 250, height: 250 * (height / width) });
                     });
                   }
                 }, [imageUrl]);
 
                 return (
-                  <TouchableOpacity
+                  <View
+                    style={[
+                      {
+                        borderTopLeftRadius: 16,
+                        borderTopRightRadius: 16,
+                        overflow: "hidden",
+                      },
+                      isMyMessage
+                        ? { borderBottomLeftRadius: 16 }
+                        : { borderBottomRightRadius: 16 }
+                    ]}
                     key={`${message.id}-${i}`}
-                    onPress={() => setVisibleImage(imageUrl || "")}
-                    activeOpacity={0.9}
-                    className=""
                   >
-                    <Image
-                      source={{ uri: imageUrl }}
-                      className="rounded-lg"
-                      style={{
-                        width: imageDimensions.width,
-                        height: imageDimensions.height,
-                      }}
-                      resizeMode="cover"
-                    />
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setVisibleImage(imageUrl || "")}
+                      activeOpacity={0.9}
+                    >
+                      <Image
+                        source={{ uri: imageUrl }}
+                        style={imageDimensions}
+                        resizeMode="cover"
+                      />
+                    </TouchableOpacity>
+                  </View>
                 );
               }
 
-              // Handle video attachments
-              if (
-                attachment.type === "video" ||
-                (imageUrl && imageUrl.match(/\.(mp4|mov|webm)$/i))
-              ) {
+              if (attachment.type === "video" || (imageUrl && imageUrl.match(/\.(mp4|mov|webm)$/i))) {
+                if (!imageUrl) return null;
+                const player = useVideoPlayer({ uri: imageUrl }, (player) => {
+                  player.loop = true;
+                  player.play();
+                });
+
                 return (
-                  <View key={`${message.id}-${i}`} className=" rounded-lg overflow-hidden">
-                    <Video
-                      source={{ uri: imageUrl }}
-                      useNativeControls
-                      resizeMode="contain"
-                      style={{
-                        width: 200,
-                        height: 200,
-                        borderRadius: 12,
-                        backgroundColor: "#000",
-                      }}
+                  <View
+                    style={[
+                      styles.videoContainer,
+                      {
+                        borderTopLeftRadius: 16,
+                        borderTopRightRadius: 16,
+                      },
+                      isMyMessage
+                        ? { borderBottomLeftRadius: 16 }
+                        : { borderBottomRightRadius: 16 }
+                    ]}
+                    key={`${message.id}-${i}`}
+                  >
+                    <VideoView
+                      style={styles.video}
+                      player={player}
+                      allowsFullscreen
+                      allowsPictureInPicture
                     />
                   </View>
                 );
               }
 
-              // Handle giphy
               if (attachment.type === "giphy") {
-                return <Giphy key={`${message.id}-${i}`} attachment={attachment} />;
+                const giphyUrl = attachment.giphy?.fixed_height?.url || attachment.image_url || attachment.asset_url;
+                if (!giphyUrl) return null;
+
+                // State to store dynamic height based on GIPHY aspect ratio
+                const [giphyDimensions, setGiphyDimensions] = useState({ width: 250, height: 250 });
+
+                useEffect(() => {
+                  if (giphyUrl) {
+                    Image.getSize(giphyUrl, (width, height) => {
+                      // Calculate height based on fixed width (250) and original aspect ratio
+                      setGiphyDimensions({ width: 250, height: 250 * (height / width) });
+                    });
+                  }
+                }, [giphyUrl]);
+
+                return (
+                  <View
+                    style={[
+                      {
+                        width: 250,
+                        height: 250 * (giphyUrl ? 1 : 0.5),
+                        borderTopLeftRadius: 16,
+                        borderTopRightRadius: 16,
+                        overflow: "hidden",
+                      },
+                      isMyMessage
+                        ? { borderBottomLeftRadius: 16 }
+                        : { borderBottomRightRadius: 16 }
+                    ]}
+                    key={`${message.id}-${i}-container`}
+                  >
+                    <TouchableOpacity
+                      onPress={() => setVisibleImage(giphyUrl)}
+                      activeOpacity={0.9}
+                      style={{ flex: 1 }}
+                    >
+                      <Image
+                        source={{ uri: giphyUrl }}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                        }}
+                        resizeMode="cover"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                );
               }
+              
 
               return null;
             })}
           </View>
-          <Text
-            className={`text-xs mt-1 ${
-              isMyMessage ? "text-right text-black" : "text-left text-gray-500"
-            }`}
-          >
+          <Text className={`text-xs mt-1 ${isMyMessage ? "text-right text-black" : "text-left text-gray-500"}`}>
             {new Date(message.created_at || "").toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",
@@ -181,7 +238,6 @@ const CustomMessage = () => {
         </View>
       </View>
 
-      {/* Animated Fullscreen Modal */}
       <Modal visible={!!visibleImage} transparent animationType="none">
         <Pressable
           className="flex-1 bg-black/50 items-center justify-center"
@@ -226,10 +282,7 @@ export default function ChannelScreen() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (permission.status !== "granted") {
-        Alert.alert(
-          "Permission Denied",
-          "Access to gallery is needed to send images."
-        );
+        Alert.alert("Permission Denied", "Access to gallery is needed to send images.");
         return;
       }
 
@@ -258,8 +311,7 @@ export default function ChannelScreen() {
     }
   };
 
-  if (!channel || !channel.state)
-    return <ActivityIndicator className="mt-20" />;
+  if (!channel || !channel.state) return <ActivityIndicator className="mt-20" />;
 
   const otherMembers = Object.values(channel.state.members).filter(
     (m: any) => m.user_id !== user?.id
@@ -267,10 +319,8 @@ export default function ChannelScreen() {
   const otherUser = otherMembers[0]?.user;
 
   return (
-    <Channel channel={channel} MessageSimple={CustomMessage}>
-      <Stack.Screen
-        options={{ title: otherUser?.name || "Chat", headerShown: false }}
-      />
+    <Channel channel={channel} MessageSimple={CustomMessage} giphyVersion="fixed_height_still">
+      <Stack.Screen options={{ title: otherUser?.name || "Chat", headerShown: false }} />
       <View className="flex-row items-center px-4 py-3 bg-white border-b border-gray-100 shadow-sm">
         <TouchableOpacity
           onPress={() => router.back()}
@@ -304,3 +354,15 @@ export default function ChannelScreen() {
     </Channel>
   );
 }
+
+const styles = StyleSheet.create({
+  videoContainer: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+  },
+  video: {
+    width: 250,
+    height: 250,
+  },
+});
