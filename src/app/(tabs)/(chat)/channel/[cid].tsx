@@ -1,190 +1,823 @@
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Text, View, Image, TouchableOpacity, FlatList } from "react-native";
+import React, { useEffect, useState, useMemo } from "react";
+import {
+  ActivityIndicator,
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  Alert,
+  Modal,
+  Pressable,
+  BackHandler,
+  StyleSheet,
+  FlatList,
+  TouchableWithoutFeedback,
+} from "react-native";
 import {
   Channel,
-  MessageInput,
   MessageList,
-  useChannelContext,
-  MessageSimple,
-  Giphy,
-  AutoCompleteSuggestionHeader,
-  AutoCompleteSuggestionItem,
+  MessageInput,
   useMessageContext,
+  useMessagesContext,
+  useChannelContext,
+  Attachment,
+  FileAttachmentGroup,
+  Gallery,
+  MessageActionListItem,
+  MessageActionListProps,
+  MessageAvatar,
+  MessageMenuProps,
+  MessageReactionPicker,
+  MessageTextContainer,
+  MessageUserReactionsAvatar,
+  MessageUserReactionsProps,
+  Poll,
+  Reaction,
+  Reply,
+  ReplyProps,
+  StreamingMessageView,
+  useChatContext,
+  useFetchReactions,
+  useTranslationContext,
 } from "stream-chat-expo";
-import { Channel as ChannelType, StreamChat } from "stream-chat";
+import { StreamChat, Channel as ChannelType } from "stream-chat";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from '~/providers/AuthProvider';
-import * as ImagePicker from 'expo-image-picker';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import * as Crypto from 'expo-crypto';
+import { useAuth } from "~/providers/AuthProvider";
+import * as ImagePicker from "expo-image-picker";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
+import { useFocusEffect } from "@react-navigation/native";
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { TapGestureHandler } from "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 const client = StreamChat.getInstance("cxc6zzq7e93f");
 
-// Enhanced Custom Message Component
-const CustomMessage = () => {
-  const { message, isMyMessage } = useMessageContext();
+// Attachment Components
+interface ImageAttachmentProps {
+  attachment: {
+    image_url?: string;
+    asset_url?: string;
+  };
+  isMyMessage: boolean;
+  message: any;
+  onImagePress: (url: string) => void;
+}
+
+const ImageAttachment: React.FC<ImageAttachmentProps> = ({ 
+  attachment, 
+  isMyMessage, 
+  message, 
+  onImagePress 
+}) => {
+  const [imageDimensions, setImageDimensions] = useState({ width: 250, height: 250 });
+  const imageUrl = attachment.image_url || attachment.asset_url;
+
+  useEffect(() => {
+    if (imageUrl) {
+      Image.getSize(imageUrl, (width, height) => {
+        setImageDimensions({ width: 250, height: 250 * (height / width) });
+      });
+    }
+  }, [imageUrl]);
+
+  return (
+    <TouchableOpacity
+      onPress={() => onImagePress(imageUrl || "")}
+      activeOpacity={0.9}
+      className="overflow-hidden rounded-2xl my-1"
+    >
+      <Image
+        source={{ uri: imageUrl }}
+        style={imageDimensions}
+        resizeMode="cover"
+      />
+    </TouchableOpacity>
+  );
+};
+
+interface VideoAttachmentProps {
+  attachment: {
+    image_url?: string;
+    asset_url?: string;
+  };
+  isMyMessage: boolean;
+  message: any;
+}
+
+const VideoAttachment: React.FC<VideoAttachmentProps> = ({ attachment, isMyMessage, message }) => {
+  const imageUrl = attachment.image_url || attachment.asset_url;
+  const player = useVideoPlayer({ uri: imageUrl }, (player) => {
+    player.loop = true;
+    player.play();
+  });
+
+  return (
+    <View 
+      className="overflow-hidden rounded-2xl my-1 bg-black"
+      style={{ width: 250, height: 250 }}
+    >
+      <VideoView
+        style={{ width: 250, height: 250 }}
+        player={player}
+        allowsFullscreen
+        allowsPictureInPicture
+      />
+    </View>
+  );
+};
+
+interface GiphyAttachmentProps {
+  attachment: {
+    giphy?: {
+      fixed_height?: {
+        url?: string;
+      };
+    };
+    image_url?: string;
+    asset_url?: string;
+  };
+  isMyMessage: boolean;
+  message: any;
+  onImagePress: (url: string) => void;
+}
+
+const GiphyAttachment = ({ attachment, isMyMessage, message, onImagePress }: GiphyAttachmentProps) => {
+  const [giphyDimensions, setGiphyDimensions] = useState({ width: 250, height: 250 });
+  const giphyUrl = attachment.giphy?.fixed_height?.url || attachment.image_url || attachment.asset_url;
+
+  useEffect(() => {
+    if (giphyUrl) {
+      Image.getSize(giphyUrl, (width, height) => {
+        setGiphyDimensions({ width: 250, height: 250 * (height / width) });
+      });
+    }
+  }, [giphyUrl]);
+
+  if (!giphyUrl) return null;
+
+  return (
+    <TouchableOpacity
+      onPress={() => onImagePress(giphyUrl)}
+      activeOpacity={0.9}
+      className="overflow-hidden rounded-2xl my-1"
+      style={{ width: 250 }}
+    >
+      <Image
+        source={{ uri: giphyUrl }}
+        style={{ width: "100%", height: giphyDimensions.height }}
+        resizeMode="cover"
+      />
+    </TouchableOpacity>
+  );
+};
+
+interface FileAttachmentProps {
+  attachment: {
+    title?: string;
+  };
+  isMyMessage: boolean;
+}
+
+const FileAttachment = ({ attachment, isMyMessage }: FileAttachmentProps) => {
+  return (
+    <View
+      className={`overflow-hidden rounded-2xl my-1 ${isMyMessage ? "bg-blue-500" : "bg-gray-100"}`}
+      style={{ width: 250 }}
+    >
+      <TouchableOpacity 
+        className="flex-row items-center p-3"
+        activeOpacity={0.7}
+      >
+        <Ionicons 
+          name="document-outline" 
+          size={24} 
+          color={isMyMessage ? "#fff" : "#4b5563"} 
+        />
+        <Text 
+          className={`ml-2 ${isMyMessage ? "text-white" : "text-gray-800"}`}
+          numberOfLines={1}
+        >
+          {attachment.title || "File"}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+interface AttachmentRendererProps {
+  attachment: {
+    type?: string;
+    image_url?: string;
+    asset_url?: string;
+    title?: string;
+  };
+  isMyMessage: boolean;
+  message: any; // Consider defining a proper type for message
+  onImagePress: (url: string) => void;
+}
+
+const AttachmentRenderer = ({
+  attachment,
+  isMyMessage,
+  message,
+  onImagePress,
+}: AttachmentRendererProps) => {
+  const imageUrl = attachment.image_url || attachment.asset_url;
+  
+  if (attachment.type === "image" || imageUrl?.match(/\.(jpeg|jpg|png|gif)$/i)) {
+    return (
+      <ImageAttachment 
+        attachment={attachment} 
+        isMyMessage={isMyMessage} 
+        message={message} 
+        onImagePress={onImagePress} 
+      />
+    );
+  }
+  
+  if (attachment.type === "video" || (imageUrl && imageUrl.match(/\.(mp4|mov|webm)$/i))) {
+    if (!imageUrl) return null;
+    return (
+      <VideoAttachment 
+        attachment={attachment} 
+        isMyMessage={isMyMessage} 
+        message={message} 
+      />
+    );
+  }
+  
+  if (attachment.type === "giphy") {
+    return (
+      <GiphyAttachment 
+        attachment={attachment} 
+        isMyMessage={isMyMessage} 
+        message={message} 
+        onImagePress={onImagePress} 
+      />
+    );
+  }
+  
+  if (attachment.type === "file") {
+    return (
+      <FileAttachment
+        attachment={attachment}
+        isMyMessage={isMyMessage}
+      />
+    );
+  }
+  
+  return null;
+};
+
+// Message timestamp component
+interface MessageTimestampProps {
+  timestamp?: string | number | Date;
+  isMyMessage: boolean;
+}
+
+const MessageTimestamp = ({ timestamp, isMyMessage }: MessageTimestampProps) => {
+  if (!timestamp) return null;
+  
+  const time = new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   
   return (
-    <View className={`flex flex-row ${isMyMessage ? 'justify-end' : 'justify-start'} mb-3`}>
-      {!isMyMessage && (
-        <Image
-          source={{ uri: message.user?.image }}
-          className="w-10 h-10 rounded-full mr-3"
-        />
-      )}
-      <View className={`max-w-[80%] rounded-2xl p-4 ${
-        isMyMessage ? 'bg-blue-500' : 'bg-gray-100'
-      } shadow-sm`}>
+    <Text className={`text-xs mt-1 ${isMyMessage ? "text-right text-gray-500" : "text-left text-gray-500"}`}>
+      {time}
+    </Text>
+  );
+};
+
+// Message header with sender name for group chats
+interface MessageHeaderProps {
+  message: {
+    user?: {
+      id?: string;
+      name?: string;
+    };
+  };
+  members?: unknown;
+}
+
+const MessageHeader = (props: MessageHeaderProps) => {
+  const { message } = props;
+  const { channel } = useChannelContext();
+  const isGroup = Object.keys(channel.state.members).length > 2;
+  
+  // Only show headers for other users' messages in group chats
+  if (!isGroup || !message?.user?.name || message?.user?.id === client.userID) return null;
+  
+  return (
+    <Text className="text-sm text-gray-500 mb-1">{message.user.name}</Text>
+  );
+};
+
+const CustomMessageActionsList = (props: MessageActionListProps) => {
+  const { messageActions } = props;
+  
+  return (
+    <View className="bg-white rounded-lg p-4 shadow-md w-11/12 max-w-md">
+      {messageActions?.map((action) => (
+        <TouchableOpacity 
+          key={action.title} 
+          className="flex-row items-center py-3 border-b border-gray-100"
+          onPress={action.action}
+        >
+          <View className="w-8 h-8 rounded-full bg-blue-50 items-center justify-center mr-3">
+            {action.icon ? (
+              action.icon
+            ) : (
+              <Ionicons name="chatbubble-outline" size={18} color="#3b82f6" />
+            )}
+          </View>
+          <Text className="text-gray-800 text-base">{action.title}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+};
+
+const CustomMessageReactions = (props: MessageUserReactionsProps) => {
+  const { reactions: propReactions, selectedReaction } = props;
+  const { supportedReactions, MessageUserReactionsItem } = useMessagesContext();
+  const { message } = useMessageContext();
+  const { loadNextPage, reactions: fetchedReactions } = useFetchReactions({
+    message,
+    reactionType: selectedReaction,
+    sort: {
+      created_at: -1,
+    },
+  });
+  const { t } = useTranslationContext();
+  
+  const reactions = useMemo(
+    () =>
+      propReactions ||
+      (fetchedReactions.map((reaction) => ({
+        id: reaction.user?.id,
+        image: reaction.user?.image,
+        name: reaction.user?.name,
+        type: reaction.type,
+      })) as Reaction[]),
+    [propReactions, fetchedReactions],
+  );
+
+  const renderItem = ({ item }: { item: Reaction }) => (
+    <View className="w-1/4 py-2">
+      <MessageUserReactionsItem
+        MessageUserReactionsAvatar={MessageUserReactionsAvatar}
+        reaction={item}
+        supportedReactions={supportedReactions ?? []}
+      />
+    </View>
+  );
+
+  const renderHeader = () => (
+    <Text className="text-base font-bold text-center my-4 text-gray-800">
+      {t<string>("Message Reactions")}
+    </Text>
+  );
+
+  return (
+    <View className="bg-white rounded-lg p-4 shadow-md w-11/12 max-w-md max-h-[200px]">
+      <FlatList
+        accessibilityLabel="reaction-flat-list"
+        columnWrapperStyle={{ justifyContent: 'space-evenly' }}
+        contentContainerStyle={{ justifyContent: 'center' }}
+        data={reactions}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={renderHeader}
+        numColumns={4}
+        onEndReached={loadNextPage}
+        renderItem={renderItem}
+      />
+    </View>
+  );
+};
+
+export const CustomMessageMenu = (props: MessageMenuProps) => {
+  const { client } = useChatContext();
+  const {
+    alignment,
+    files,
+    groupStyles,
+    images,
+    message,
+    dismissOverlay,
+    handleReaction,
+    onlyEmojis,
+    otherAttachments,
+    threadList,
+    videos,
+  } = useMessageContext();
+  
+  const {
+    messageContentOrder,
+    messageTextNumberOfLines,
+    isMessageAIGenerated,
+  } = useMessagesContext();
+  
+  const own_reactions =
+    message?.own_reactions?.map((reaction) => reaction.type) || [];
+    
+  const {
+    messageActions,
+    showMessageReactions,
+    selectedReaction,
+    MessageUserReactionsItem,
+  } = props;
+
+  const groupStyle = `${alignment}_${(groupStyles?.[0] || "bottom").toLowerCase()}`;
+  const hasThreadReplies = !!message?.reply_count;
+  
+  const messageHeight = useSharedValue(0);
+  const messageLayout = useSharedValue({ x: 0, y: 0 });
+  const messageWidth = useSharedValue(0);
+
+  return (
+    <View className="flex-1">
+      <Modal onRequestClose={dismissOverlay} transparent visible={true}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <TouchableWithoutFeedback
+            onPress={dismissOverlay}
+            style={{ flex: 1 }}
+          >
+            <View className="flex-1 bg-black/70 justify-center items-center">
+              <MessageReactionPicker
+                dismissOverlay={dismissOverlay}
+                handleReaction={handleReaction}
+                ownReactionTypes={own_reactions}
+              />
+              
+              <Animated.View
+                onLayout={({
+                  nativeEvent: {
+                    layout: { height: layoutHeight, width: layoutWidth, x, y },
+                  },
+                }) => {
+                  messageLayout.value = {
+                    x: alignment === "left" ? x + layoutWidth : x,
+                    y,
+                  };
+                  messageWidth.value = layoutWidth;
+                  messageHeight.value = layoutHeight;
+                }}
+                className={`items-${alignment === "left" ? "start" : "end"} flex-row`}
+              >
+                {alignment === "left" && MessageAvatar && (
+                  <MessageAvatar
+                    {...{ alignment, message, showAvatar: true }}
+                  />
+                )}
+                
+                <View
+                  className={`
+                    rounded-tl-2xl rounded-tr-2xl overflow-hidden my-2
+                    ${onlyEmojis && !message.quoted_message ? "" : "border border-gray-200"}
+                    ${otherAttachments?.length && otherAttachments[0].type === "giphy" && !message.quoted_message 
+                      ? "" 
+                      : otherAttachments?.length ? "bg-blue-50" : 
+                        alignment === "left" ? "bg-white" : "bg-gray-100"}
+                    ${(groupStyle === "left_bottom" || groupStyle === "left_single") && 
+                      (!hasThreadReplies || threadList) ? "rounded-bl-sm" : "rounded-bl-2xl"}
+                    ${(groupStyle === "right_bottom" || groupStyle === "right_single") && 
+                      (!hasThreadReplies || threadList) ? "rounded-br-sm" : "rounded-br-2xl"}
+                  `}
+                  style={
+                    (onlyEmojis && !message.quoted_message) || otherAttachments?.length
+                      ? { borderWidth: 0 }
+                      : {}
+                  }
+                >
+                  {messageContentOrder.map(
+                    (messageContentType, messageContentOrderIndex) => {
+                      switch (messageContentType) {
+                        case "quoted_reply":
+                          return (
+                            message.quoted_message && (
+                              <View
+                                key={`quoted_reply_${messageContentOrderIndex}`}
+                                className="flex-row px-2 pt-2"
+                              >
+                                <Reply
+                                  quotedMessage={
+                                    message.quoted_message as ReplyProps["quotedMessage"]
+                                  }
+                                />
+                              </View>
+                            )
+                          );
+                        case "gallery":
+                          return (
+                            <Gallery
+                              alignment={alignment}
+                              groupStyles={groupStyles}
+                              hasThreadReplies={!!message?.reply_count}
+                              images={images}
+                              key={`gallery_${messageContentOrderIndex}`}
+                              message={message}
+                              threadList={threadList}
+                              videos={videos}
+                            />
+                          );
+                        case "files":
+                          return (
+                            <FileAttachmentGroup
+                              files={files}
+                              key={`file_attachment_group_${messageContentOrderIndex}`}
+                              messageId={message.id}
+                            />
+                          );
+                        case "poll":
+                          const pollId = message.poll_id;
+                          const poll = pollId && client.polls.fromState(pollId);
+                          return poll ? (
+                            <Poll message={message} poll={poll} />
+                          ) : null;
+                        case "ai_text": {
+                          return isMessageAIGenerated?.(message) ? (
+                            <StreamingMessageView
+                              key={`ai_message_text_container_${messageContentOrderIndex}`}
+                              message={message}
+                            />
+                          ) : null;
+                        }
+                        case "attachments":
+                          return otherAttachments?.map(
+                            (attachment, attachmentIndex) => (
+                              <Attachment
+                                attachment={attachment}
+                                key={`${message.id}-${attachmentIndex}`}
+                              />
+                            ),
+                          );
+                        case "text":
+                        default:
+                          return (otherAttachments?.length &&
+                            otherAttachments[0].actions) ||
+                            isMessageAIGenerated?.(message) ? null : (
+                            <MessageTextContainer
+                              key={`message_text_container_${messageContentOrderIndex}`}
+                              messageOverlay
+                              messageTextNumberOfLines={
+                                messageTextNumberOfLines
+                              }
+                              onlyEmojis={onlyEmojis}
+                            />
+                          );
+                      }
+                    },
+                  )}
+                </View>
+              </Animated.View>
+              
+              {showMessageReactions ? (
+                <CustomMessageReactions
+                  message={message}
+                  MessageUserReactionsAvatar={MessageUserReactionsAvatar}
+                  MessageUserReactionsItem={MessageUserReactionsItem}
+                  selectedReaction={selectedReaction}
+                />
+              ) : (
+                <CustomMessageActionsList
+                  dismissOverlay={dismissOverlay}
+                  MessageActionListItem={MessageActionListItem}
+                  messageActions={messageActions}
+                />
+              )}
+            </View>
+          </TouchableWithoutFeedback>
+        </GestureHandlerRootView>
+      </Modal>
+    </View>
+  );
+};
+
+const CustomMessage = () => {
+  const { message, isMyMessage, groupStyles, onLongPress } = useMessageContext();
+  const { handleReaction } = useMessagesContext();
+  const [visibleImage, setVisibleImage] = useState<string | null>(null);
+  const scaleAnim = useSharedValue(0);
+  const opacityAnim = useSharedValue(0);
+  
+  // Check if message should be grouped
+  const shouldGroupWithPrevious = groupStyles?.includes('bottom');
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const backAction = () => {
+        if (visibleImage) {
+          setVisibleImage(null);
+          return true;
+        }
+        return false;
+      };
+
+      const backHandler = BackHandler.addEventListener(
+        "hardwareBackPress",
+        backAction
+      );
+
+      return () => backHandler.remove();
+    }, [visibleImage])
+  );
+
+  useEffect(() => {
+    if (visibleImage) {
+      scaleAnim.value = withSpring(1, { damping: 10 });
+      opacityAnim.value = withTiming(1, { duration: 300 });
+    } else {
+      scaleAnim.value = 0;
+      opacityAnim.value = 0;
+    }
+  }, [visibleImage]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scaleAnim.value }],
+    opacity: opacityAnim.value,
+  }));
+
+  const handleImagePress = (imageUrl: string) => {
+    setVisibleImage(imageUrl);
+  };
+  
+  const handleDoubleTap = () => {
+    if (message && message.id && handleReaction) {
+      handleReaction(message, 'love');
+    }
+  };
+
+  // Display message reactions
+  const renderReactions = () => {
+    if (!message.latest_reactions || message.latest_reactions.length === 0) return null;
+    
+    // Group reactions by type
+    const reactionsByType: {[key: string]: {count: number, own: boolean}} = {};
+    
+    message.latest_reactions.forEach((reaction: any) => {
+      const type = reaction.type;
+      if (!reactionsByType[type]) {
+        reactionsByType[type] = { count: 0, own: false };
+      }
+      reactionsByType[type].count += 1;
+      
+      // Check if this reaction is from the current user
+      if (reaction.user_id === client.userID) {
+        reactionsByType[type].own = true;
+      }
+    });
+    
+    return (
+      <View className={`flex-row ${isMyMessage ? "justify-end" : "justify-start"} mx-4 my-1`}>
+        <View className="flex-row bg-gray-100 rounded-full px-2 py-1">
+          {Object.entries(reactionsByType).map(([type, data]) => (
+            <TouchableOpacity 
+              key={type}
+              onPress={() => handleReaction?.(message, type)}
+              className={`flex-row items-center mx-1 ${data.own ? "bg-blue-100 rounded-lg px-1" : ""}`}
+            >
+              <Text className="text-base mr-1">{getReactionEmoji(type)}</Text>
+              <Text className="text-xs text-gray-600">{data.count}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
+  };
+  
+  // Helper function to convert reaction type to emoji
+  const getReactionEmoji = (type: string) => {
+    const reactions: {[key: string]: string} = {
+      love: "❤️", 
+      like: "👍", 
+      haha: "😂", 
+      wow: "😮", 
+      sad: "😢", 
+      angry: "😠",
+    };
+    
+    return reactions[type] || "👍";
+  };
+
+  return (
+    <>
+      <View className={`flex-row px-4 ${isMyMessage ? "justify-end" : "justify-start"}`}
+        style={{ 
+          marginBottom: shouldGroupWithPrevious ? 2 : 8,
+          marginTop: shouldGroupWithPrevious ? 0 : 2 
+        }}
+      >
+        {/* Avatar or spacing placeholder */}
         {!isMyMessage && (
-          <Text className="text-sm font-semibold text-gray-800 mb-1">
-            {message.user?.name}
-          </Text>
+          <View className="w-10 mr-2 items-start justify-start">
+            {!shouldGroupWithPrevious && message.user?.image ? (
+              <Image
+                source={{ uri: message.user?.image }}
+                className="w-8 h-8 rounded-full"
+              />
+            ) : null}
+          </View>
         )}
-        <Text className={`text-base ${isMyMessage ? 'text-white' : 'text-gray-800'}`}>
-          {message.text}
-        </Text>
-        <View className="flex flex-row items-center justify-end mt-1">
-          <Text className={`text-xs ${
-            isMyMessage ? 'text-blue-200' : 'text-gray-500'
-          }`}>
-            {new Date(message.created_at || '').toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </Text>
-          {isMyMessage && (
-            <Ionicons 
-              name="checkmark-done" 
-              size={14} 
-              color={message.status === 'read' ? '#3b82f6' : '#a5b4fc'} 
-              className="ml-1"
+        
+        {/* Message content */}
+        <View className={`${isMyMessage ? "items-end" : "items-start"}`} style={{ maxWidth: '75%' }}>
+          {/* Show user name in group chats */}
+          {!shouldGroupWithPrevious && !isMyMessage && message.user && (
+            <MessageHeader message={{ user: { id: message.user.id, name: message.user.name } }} />
+          )}
+          
+          <TapGestureHandler
+            numberOfTaps={2}
+            onActivated={handleDoubleTap}
+          >
+            <View>
+              {message.text && (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onLongPress={onLongPress}
+                  delayLongPress={500}
+                >
+                  <View
+                    className={`px-4 py-2.5 ${
+                      isMyMessage 
+                        ? "bg-blue-500 rounded-tl-2xl rounded-bl-2xl rounded-tr-sm rounded-br-sm" 
+                        : "bg-gray-100 rounded-tr-2xl rounded-br-2xl rounded-tl-sm rounded-bl-sm"
+                    } ${
+                      shouldGroupWithPrevious 
+                        ? isMyMessage 
+                          ? "rounded-tr-2xl" 
+                          : "rounded-tl-2xl" 
+                        : ""
+                    }`}
+                  >
+                    <Text className={`text-base ${isMyMessage ? "text-white" : "text-gray-900"}`}>
+                      {message.text}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+              
+              {message.attachments?.map((attachment, i) => (
+                <AttachmentRenderer
+                  key={`${message.id}-${i}-${attachment.type || 'attachment'}`}
+                  attachment={attachment}
+                  isMyMessage={isMyMessage}
+                  message={message}
+                  onImagePress={handleImagePress}
+                />
+              ))}
+            </View>
+          </TapGestureHandler>
+          
+          {!shouldGroupWithPrevious && (
+            <MessageTimestamp 
+              timestamp={message.created_at} 
+              isMyMessage={isMyMessage}
             />
           )}
         </View>
       </View>
-    </View>
-  );
-};
 
-// Enhanced Custom Message List Component
-const CustomMessageList = () => {
-  return (
-    <MessageList 
-      MessageSimple={CustomMessage}
-      styles={{
-        container: {
-          backgroundColor: '#ffffff',
-          paddingHorizontal: 16,
-        },
-        messageContainer: {
-          marginBottom: 12,
-        },
-      }}
-    />
-  );
-};
+      {/* Render reactions */}
+      {renderReactions()}
 
-// Enhanced Header Component with proper online status
-const CustomHeader = ({ otherUser, router, channel }) => {
-  const [isOnline, setIsOnline] = useState(false);
-
-  useEffect(() => {
-    if (channel && otherUser) {
-      const member = channel.state.members[otherUser.id];
-      setIsOnline(member?.user?.online || false);
-    }
-  }, [channel, otherUser]);
-
-  return (
-    <View className="flex flex-row items-center px-4 py-3 bg-white border-b border-gray-100 shadow-sm">
-      <TouchableOpacity 
-        onPress={() => router.back()} 
-        className="p-2 rounded-full bg-gray-50 active:bg-gray-100"
-      >
-        <Ionicons name="arrow-back" size={20} color="#4b5563" />
-      </TouchableOpacity>
-      {otherUser?.image ? (
-        <Image
-          source={{ uri: otherUser.image }}
-          className="w-10 h-10 rounded-full ml-3 mr-3 border-2 border-white"
-        />
-      ) : (
-        <View className="w-10 h-10 rounded-full bg-gray-100 ml-3 mr-3 items-center justify-center border-2 border-white">
-          <Ionicons name="person" size={20} color="#9ca3af" />
-        </View>
-      )}
-      <View>
-        <Text className="text-lg font-semibold text-gray-800">{otherUser?.name || otherUser?.id}</Text>
-        <Text className={`text-sm ${
-          isOnline ? 'text-green-500' : 'text-gray-500'
-        }`}>
-          {isOnline ? 'Online' : 'Offline'}
-        </Text>
-      </View>
-    </View>
-  );
-};
-
-// Enhanced Message Input Component
-const CustomMessageInput = ({ handleImageUpload }) => (
-  <View className="bg-white px-4 py-2 border-t border-gray-100">
-    <MessageInput 
-      additionalTextInputProps={{
-        placeholder: "Type a message...",
-        style: {
-          backgroundColor: '#f3f4f6',
-          borderRadius: 25,
-          paddingHorizontal: 20,
-          paddingVertical: 12,
-          fontSize: 16,
-        }
-      }}
-      fileUploadsEnabled={true}
-      imageUploadsEnabled={true}
-      sendImageAsync={true}
-      additionalTouchableProps={{
-        activeOpacity: 0.7,
-      }}
-      sendButtonStyle={{
-        backgroundColor: '#3b82f6',
-        borderRadius: 20,
-        padding: 10,
-        marginLeft: 8,
-      }}
-      ImageUploadIcon={() => (
-        <TouchableOpacity 
-          onPress={handleImageUpload}
-          className="p-2 rounded-full bg-gray-100 active:bg-gray-200"
+      <Modal visible={!!visibleImage} transparent animationType="none">
+        <Pressable
+          className="flex-1 bg-black/70 items-center justify-center"
+          onPress={() => setVisibleImage(null)}
         >
-          <Ionicons name="image-outline" size={24} color="#3b82f6" />
-        </TouchableOpacity>
-      )}
-    />
-  </View>
-);
+          {visibleImage && (
+            <Animated.Image
+              source={{ uri: visibleImage }}
+              style={[
+                {
+                  width: "100%",
+                  height: "100%",
+                  resizeMode: "contain",
+                },
+                animatedStyle,
+              ]}
+            />
+          )}
+        </Pressable>
+      </Modal>
+    </>
+  );
+};
 
 export default function ChannelScreen() {
-  const [channel, setChannel] = useState<ChannelType | null>(null);
   const { cid } = useLocalSearchParams<{ cid: string }>();
-  const { user } = useAuth();
   const router = useRouter();
-
-  useEffect(() => {
-    const verifyPermissions = async () => {
-      const { status } = await ImagePicker.getMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        const { status: newStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (newStatus !== 'granted') {
-          alert('Permission to access gallery is required to send images');
-          return false;
-        }
-      }
-      return true;
-    };
-
-    verifyPermissions();
-  }, []);
+  const { user } = useAuth();
+  const [channel, setChannel] = useState<ChannelType | null>(null);
 
   useEffect(() => {
     const fetchChannel = async () => {
@@ -194,171 +827,133 @@ export default function ChannelScreen() {
     fetchChannel();
   }, [cid]);
 
-  if (!channel || !channel.state) {
-    return <ActivityIndicator />;
-  }
-
-  // Get other members from the channel
-  const otherMembers = Object.values(channel.state.members).filter(member => member.user_id !== user.id);
-  const otherUser = otherMembers[0]?.user;
-
-  const customEmojiSearchIndex = {
-    search: (query: string) => {
-      // Implement your custom emoji search logic here
-      return [
-        { name: 'smile', unicode: '😊', names: ['smile', 'happy'] },
-        { name: 'heart', unicode: '❤️', names: ['heart', 'love'] },
-        // Add more emojis as needed
-      ].filter(emoji => 
-        emoji.names.some(name => name.includes(query.toLowerCase()))
-      );
-    },
-  };
-
   const handleImageUpload = async () => {
+    if (!channel) return;
+
     try {
-      const hasPermission = await ImagePicker.getMediaLibraryPermissionsAsync();
-      if (hasPermission.status !== 'granted') {
-        alert('Gallery access is required to send images');
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== "granted") {
+        Alert.alert("Permission Denied", "Access to gallery is needed to send images.");
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
-        aspect: [4, 3],
         quality: 1,
-        selectionLimit: 0, // Allow multiple selections
       });
 
       if (!result.canceled && result.assets.length > 0) {
-        const selectedImages = result.assets;
-        
-        // Upload each image to the channel
-        for (const image of selectedImages) {
-          const file = {
-            uri: image.uri,
-            name: image.fileName || `image_${Date.now()}.jpg`,
-            type: image.type || 'image/jpeg',
-          };
-
-          // Create a message with the image attachment
-          const message = {
-            text: '',
-            attachments: [
-              {
-                type: 'image',
-                asset_url: file.uri,
-                image_url: file.uri,
-                file_size: file.size,
-              }
-            ]
-          };
-
-          // Send the message to the channel
-          if (channel) {
-            await channel.sendMessage(message);
-          }
-        }
+        const img = result.assets[0];
+        await channel.sendMessage({
+          text: "",
+          attachments: [
+            {
+              type: "image",
+              image_url: img.uri,
+              asset_url: img.uri,
+            },
+          ],
+        });
       }
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      alert('Failed to upload image. Please try again.');
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Upload Failed", "Could not send the image.");
     }
   };
 
+  if (!channel || !channel.state) return <ActivityIndicator className="mt-20" />;
+
+  const otherMembers = Object.values(channel.state.members).filter(
+    (m: any) => m.user_id !== user?.id
+  );
+  const otherUser = otherMembers[0]?.user;
+
   return (
     <Channel 
-      channel={channel} 
-      audioRecordingEnabled
-      emojiSearchIndex={customEmojiSearchIndex}
-      AutoCompleteSuggestionHeader={({ queryText, triggerType }) => {
-        if (triggerType === "command") {
-          return <Text className="text-gray-600 px-4 py-2">Available Commands</Text>;
-        } else if (triggerType === "emoji") {
-          return <Text className="text-gray-600 px-4 py-2">Emoji Suggestions</Text>;
-        } else {
-          return <AutoCompleteSuggestionHeader queryText={queryText} triggerType={triggerType} />;
-        }
-      }}
-      AutoCompleteSuggestionItem={({ itemProps, triggerType }) => {
-        if (triggerType === "command") {
-          return (
-            <View className="px-4 py-2">
-              <Text className="font-semibold">{itemProps.name}</Text>
-              <Text className="text-gray-500">{itemProps.args}</Text>
-            </View>
-          );
-        } else if (triggerType === "mention") {
-          return (
-            <View className="flex-row items-center px-4 py-2">
-              <Image
-                source={{ uri: itemProps.image }}
-                className="w-8 h-8 rounded-full mr-3"
-              />
-              <Text className="font-medium">{itemProps.name}</Text>
-            </View>
-          );
-        } else {
-          return <AutoCompleteSuggestionItem itemProps={itemProps} triggerType={triggerType} />;
-        }
-      }}
-      AutoCompleteSuggestionList={({ data, onSelect, queryText, triggerType }) => {
-        if (triggerType === "emoji") {
-          return (
-            <FlatList
-              data={data}
-              keyboardShouldPersistTaps="always"
-              ListHeaderComponent={
-                <AutoCompleteSuggestionHeader
-                  queryText={queryText}
-                  triggerType={triggerType}
-                />
-              }
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  className="px-4 py-2"
-                  onPress={() => onSelect(item)}
-                >
-                  <Text className="text-2xl">{item.unicode}</Text>
-                  <Text className="text-gray-500">{item.name}</Text>
-                </TouchableOpacity>
-              )}
-            />
-          );
-        } else {
-          return (
-            <View className="bg-white rounded-lg shadow-sm">
-              <AutoCompleteSuggestionHeader
-                queryText={queryText}
-                triggerType={triggerType}
-              />
-              {data.map((item) => (
-                <AutoCompleteSuggestionItem
-                  itemProps={item}
-                  key={item.name}
-                  triggerType={triggerType}
-                />
-              ))}
-            </View>
-          );
-        }
+      channel={channel}
+      MessageSimple={CustomMessage}
+      MessageMenu={CustomMessageMenu}
+      enableMessageGroupingByUser
+      keyboardVerticalOffset={0}
+      deletedMessagesVisibilityType="sender"
+      forceAlignMessages={false}
+      additionalTextInputProps={{
+        placeholder: "Type a message...",
+        placeholderTextColor: "#9ca3af",
+        style: { fontSize: 16 }
       }}
     >
-      <Stack.Screen
-        options={{
-          title: otherUser?.name || 'Chat',
-          headerRight: () => null,
-        }}
-      />
+      <Stack.Screen options={{ title: otherUser?.name || "Chat", headerShown: false }} />
       
-      <CustomHeader otherUser={otherUser} router={router} channel={channel} />
+      {/* Header */}
+      <View className="flex-row items-center px-4 py-3 bg-white border-b border-gray-100 shadow-sm">
+        <TouchableOpacity
+          onPress={() => router.back()}
+          className="p-2 rounded-full bg-gray-100"
+        >
+          <Ionicons name="arrow-back" size={20} color="#4b5563" />
+        </TouchableOpacity>
+        
+        {otherUser?.image ? (
+          <Image
+            source={{ uri: otherUser.image as string }}
+            className="w-10 h-10 rounded-full ml-3 mr-3 border-2 border-white"
+          />
+        ) : (
+          <View className="w-10 h-10 rounded-full bg-gray-100 ml-3 mr-3 items-center justify-center">
+            <Ionicons name="person" size={20} color="#9ca3af" />
+          </View>
+        )}
+        
+        <View>
+          <Text className="text-lg font-semibold text-gray-800">
+            {otherUser?.name || otherUser?.id}
+          </Text>
+          <Text className="text-sm text-gray-500">
+            {otherUser?.online ? "Online" : "Offline"}
+          </Text>
+        </View>
+      </View>
+
+      {/* Message list */}
+      <View className="flex-1 bg-white">
+        <MessageList />
+      </View>
       
-      <CustomMessageList />
-      
-      <SafeAreaView edges={["bottom"]}>
-        <CustomMessageInput handleImageUpload={handleImageUpload} />
-      </SafeAreaView>
+      {/* Message input with attachment button */}
+      <View className="border-t border-gray-100">
+        <View className="flex-row items-center">
+          <TouchableOpacity 
+            onPress={handleImageUpload}
+            className="p-3 ml-2"
+          >
+            <Ionicons name="image-outline" size={24} color="#3b82f6" />
+          </TouchableOpacity>
+          <View className="flex-1">
+            <MessageInput />
+          </View>
+        </View>
+      </View>
     </Channel>
   );
 }
+
+const styles = StyleSheet.create({
+  videoContainer: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+  },
+  video: {
+    width: 250,
+    height: 250,
+  },
+  fileContainer: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    overflow: 'hidden',
+    marginTop: 4,
+    width: 250,
+  }
+});

@@ -17,12 +17,12 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import Feather from '@expo/vector-icons/Feather';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useLocalSearchParams } from 'expo-router';
-import ViewImage from '~/Components/viewImage';
 import StoryViewer from '~/app/story/StoryViewer';
 import { useAuth } from '~/providers/AuthProvider';
 import { supabase } from '~/lib/supabase';
 import { BlurView } from 'expo-blur';
 import Animated, { useSharedValue, withSpring } from 'react-native-reanimated';
+import ViewImage from '~/Components/viewImage';
 
 // Define the Post type
 type Post = {
@@ -47,67 +47,31 @@ const ProfileScreen = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
   const [postsCount, setPostsCount] = useState(0);
-  const [activeTab, setActiveTab] = useState('posts'); // 'posts' or 'saved'
-  const { width } = useWindowDimensions();
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [selectedPost, setSelectedPost] = useState<{
-    id: string;
-    mediaUrl: string;
-    username: string;
-    avatarUrl: string;
-    timestamp: string;
-    caption: string;
-    likesCount: number;
-    comments: any[];
-  } | null>(null);
+  const [activeTab, setActiveTab] = useState('posts');
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMorePosts, setHasMorePosts] = useState(true);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
-  const [stories, setStories] = useState<Story[]>([]);
+  const [stories, setStories] = useState<any[]>([]);
   const [showStoryViewer, setShowStoryViewer] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const optionsPanelY = useSharedValue(500);
   const [isMounted, setIsMounted] = useState(false);
-  const [isDataReady, setIsDataReady] = useState(false); // New state for data readiness
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isImageLoading, setIsImageLoading] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
+    return () => setIsMounted(false);
   }, []);
 
   useEffect(() => {
     if (user) {
       fetchProfile();
     }
-  }, [user]);
-
-  useEffect(() => {
-    const fetchStories = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('stories')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: true });
-
-        if (error) throw error;
-        setStories(data || []);
-      } catch (error) {
-        console.error('Error fetching stories:', error);
-      }
-    };
-
-    if (user) {
-      fetchStories();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (refresh === 'true') {
-      fetchProfile();
-    }
-  }, [refresh]);
+  }, [user, refresh]);
 
   useEffect(() => {
     if (showOptions) {
@@ -117,68 +81,29 @@ const ProfileScreen = () => {
     }
   }, [showOptions]);
 
+
   const fetchProfile = async () => {
     setIsLoading(true);
-    setIsDataReady(false); // Set to false when starting to fetch data
     try {
+      if (!user) throw new Error('User not found');
       const [profileResponse, postsResponse, followersResponse, followingResponse] = await Promise.all([
-        supabase
-          .from('users')
-          .select('id, username, full_name, email, avatar_url, bio, website, is_private, verified')
-          .eq('id', user.id)
-          .single(),
-        supabase
-          .from('posts')
-          .select(`
-            id, 
-            media_url, 
-            caption, 
-            created_at, 
-            user:users(username, avatar_url),
-            likes:likes(count)
-          `)
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .range(0, 9), // Only fetch first 10 posts initially
-        supabase
-          .from('friends')
-          .select('friend_id', { count: 'exact' })
-          .eq('friend_id', user.id), // Count followers
-        supabase
-          .from('friends')
-          .select('user_id', { count: 'exact' })
-          .eq('user_id', user.id) // Count following
+        supabase.from('users').select('*').eq('id', user.id).single(),
+        supabase.from('posts').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).range(0, 9),
+        supabase.from('friends').select('friend_id', { count: 'exact' }).eq('friend_id', user.id),
+        supabase.from('friends').select('user_id', { count: 'exact' }).eq('user_id', user.id)
       ]);
 
-      if (profileResponse.error) throw profileResponse.error;
-      if (postsResponse.error) throw postsResponse.error;
-      if (followersResponse.error) throw followersResponse.error;
-      if (followingResponse.error) throw followingResponse.error;
-
       setProfile(profileResponse.data);
-      setUsername(profileResponse.data.username || '');
-      setBio(profileResponse.data.bio || '');
-
-      const processedPosts = postsResponse.data.map(post => ({
-        ...post,
-        likes_count: post.likes[0]?.count || 0
-      }));
-
-      setPosts(processedPosts || []);
-      setPostsCount(processedPosts.length || 0);
-      setHasMorePosts(processedPosts.length >= 10);
-
-      // Update follower and following counts
-      const followersCount = followersResponse.count || 0;
-      const followingCount = followingResponse.count || 0;
-
-      // Set the counts in state (you'll need to create these states)
-      setFollowersCount(followersCount);
-      setFollowingCount(followingCount);
-
-      setIsDataReady(true); // Set to true after all data is fetched
+      setUsername(profileResponse.data?.username || '');
+      setBio(profileResponse.data?.bio || '');
+      const postsData = postsResponse.data || [];
+      setPosts(postsData);
+      setPostsCount(postsData.length);
+      setHasMorePosts(postsData.length >= 10);
+      setFollowersCount(followersResponse.count ?? 0);
+      setFollowingCount(followingResponse.count ?? 0);
     } catch (error) {
-      console.error('Error fetching profile data:', error.message);
+      console.error('Error fetching profile data:', error instanceof Error ? error.message : 'Unknown error');
       Alert.alert('Error', 'Failed to load profile data');
     } finally {
       setIsLoading(false);
@@ -186,19 +111,16 @@ const ProfileScreen = () => {
   };
 
   const handleUpdateProfile = async () => {
+    if (!user) return;
+    
     setIsUpdating(true);
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ username, bio })
-        .eq('id', user.id);
-
+      const { error } = await supabase.from('users').update({ username, bio }).eq('id', user.id);
       if (error) throw error;
-
       Alert.alert('Success', 'Profile updated successfully');
       await fetchProfile();
     } catch (error) {
-      console.error('Error updating profile:', error.message);
+      console.error('Error updating profile:', error instanceof Error ? error.message : 'Unknown error');
       Alert.alert('Error', 'Failed to update profile');
     } finally {
       setIsUpdating(false);
@@ -207,12 +129,8 @@ const ProfileScreen = () => {
 
   const handleShareProfile = async () => {
     try {
-      // Debugging: Log the username and share message
-      console.log('Username:', username);
-      const shareMessage = `Check out my profile on Pixelfy: https://pixelfy.com/profile/${username}`;
-      console.log('Share Message:', shareMessage); // Log the share message
       await Share.share({
-        message: shareMessage,
+        message: `Check out my profile on Pixelfy: https://pixelfy.com/profile/${username}`,
       });
     } catch (error) {
       console.error('Error sharing profile:', error);
@@ -227,31 +145,23 @@ const ProfileScreen = () => {
 
   const loadMorePosts = async () => {
     if (!hasMorePosts) return;
-    
     try {
+      if (!user) return;
+      
       const { data, error } = await supabase
         .from('posts')
-        .select(`
-          id, 
-          media_url, 
-          caption, 
-          created_at, 
-          user:users(username, avatar_url),
-          likes:likes(count)
-        `)
+        .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .range(page * 10, (page + 1) * 10 - 1);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading posts:', error);
+        return;
+      }
 
-      if (data.length > 0) {
-        const processedPosts = data.map(post => ({
-          ...post,
-          likes_count: post.likes[0]?.count || 0
-        }));
-
-        setPosts(prev => [...prev, ...processedPosts]);
+      if (data && data.length > 0) {
+        setPosts(prev => [...(prev || []), ...data]);
         setPage(prev => prev + 1);
         setHasMorePosts(data.length >= 10);
       } else {
@@ -262,77 +172,23 @@ const ProfileScreen = () => {
     }
   };
 
-  const handlePostPress = (post: Post) => {
-    // Directly set the selected post without delay
-    setSelectedPost({
-      id: post.id,
-      mediaUrl: post.media_url,
-      username: post.user.username,
-      avatarUrl: post.user.avatar_url,
-      timestamp: post.created_at,
-      caption: post.caption,
-      likesCount: post.likes_count,
-      comments: []
-    });
-
-    // Force a re-render by setting state twice
-    requestAnimationFrame(() => {
-      setSelectedPost(prev => ({...prev}));
-    });
-  };
-
-  const handleAvatarPress = () => {
-    if (stories.length > 0 && isMounted) {
-      // Create grouped stories object with proper structure
-      const groupedStories = {
-        [user.id]: stories.map(story => ({
-          id: story.id,
-          media_url: story.media_url,
-          type: story.media_type,
-          caption: story.caption,
-          created_at: story.created_at,
-          user: {
-            id: user.id,
-            username: profile.username,
-            avatar_url: profile.avatar_url
-          }
-        }))
-      };
-
-      router.push({
-        pathname: "/story/StoryViewer",
-        params: { 
-          storyData: JSON.stringify(groupedStories),
-          initialUserId: user.id
-        }
-      });
-    }
-  };
-
   const handleLogout = async () => {
     setShowOptions(false);
     try {
-      // Clear the session in the auth provider
       setSession(null);
-      
-      // Sign out from Supabase
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        throw error;
-      }
-      
-      // Only navigate if component is mounted
-      if (isMounted) {
-        router.replace('/(auth)/');
-      }
+      await supabase.auth.signOut();
+      if (isMounted) router.replace('/(auth)/');
     } catch (error) {
-      console.error('Error logging out:', error);
       Alert.alert('Error', 'Failed to log out. Please try again.');
     }
   };
 
-  if (isLoading || !isDataReady) {
+  const handleImagePress = (post: Post) => {
+    setSelectedImage(post.media_url);
+    setSelectedPost(post);
+  };
+
+  if (isLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
         <ActivityIndicator size="large" color="#0ea5e9" />
@@ -365,16 +221,13 @@ const ProfileScreen = () => {
         <View className="p-6">
           <View className="flex-row items-center mb-6">
             <TouchableOpacity 
-              onPress={handleAvatarPress}
-              disabled={stories.length === 0}
+              onPress={() => router.push('/(screens)/edit-profile')}
               className="mr-4"
             >
               {profile.avatar_url ? (
                 <Image
                   source={{ uri: profile.avatar_url }}
-                  className={`w-20 h-20 rounded-full border-2 ${
-                    stories.length > 0 ? 'border-blue-500' : 'border-gray-200'
-                  }`}
+                  className={`w-20 h-20 rounded-full border-2`}
                 />
               ) : (
                 <View className="w-20 h-20 rounded-full bg-gray-100 items-center justify-center border-2 border-gray-200">
@@ -402,14 +255,14 @@ const ProfileScreen = () => {
             </View>
             <TouchableOpacity 
               className="items-center"
-              onPress={() => router.push(`/(screens)/follow-list?type=followers&userId=${user.id}`)}
+              onPress={() => user && router.push(`/(screens)/follow-list?type=followers&userId=${user.id}`)}
             >
               <Text className="text-lg font-bold">{followersCount}</Text>
               <Text className="text-sm text-gray-500">Followers</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               className="items-center"
-              onPress={() => router.push(`/(screens)/follow-list?type=following&userId=${user.id}`)}
+              onPress={() => user && router.push(`/(screens)/follow-list?type=following&userId=${user.id}`)}
             >
               <Text className="text-lg font-bold">{followingCount}</Text>
               <Text className="text-sm text-gray-500">Following</Text>
@@ -453,10 +306,11 @@ const ProfileScreen = () => {
           {posts.length > 0 ? (
             <View className="flex-row flex-wrap -mx-1">
               {posts.map((post) => (
-                <TouchableOpacity 
-                  key={post.id} 
+                <TouchableOpacity
+                  key={post.id}
                   className="w-1/3 p-1"
-                  onPress={() => handlePostPress(post)}
+                  onPress={() => handleImagePress(post)}
+                  activeOpacity={0.7}
                 >
                   <View className="aspect-square rounded-lg bg-gray-100 overflow-hidden">
                     <Image
@@ -485,21 +339,6 @@ const ProfileScreen = () => {
         </View>
 
       </ScrollView>
-
-      {/* ViewImage Modal */}
-      <ViewImage
-        visible={!!selectedPost}
-        imageUrl={selectedPost?.mediaUrl || ''}
-        postId={selectedPost?.id}
-        onClose={() => setSelectedPost(null)}
-        username={selectedPost?.username}
-        avatarUrl={selectedPost?.avatarUrl}
-        timestamp={selectedPost?.timestamp}
-        caption={selectedPost?.caption}
-        likesCount={selectedPost?.likesCount}
-        initialComments={[]}
-        style={{ width: '100%', margin: 0 }}
-      />
 
       {/* Options Modal */}
       <View className="absolute inset-0" pointerEvents={showOptions ? 'auto' : 'none'}>
@@ -563,12 +402,31 @@ const ProfileScreen = () => {
           </TouchableOpacity>
         </Animated.View>
       </View>
+
+      {/* Image Viewer Modal */}
+      <ViewImage
+        visible={!!selectedImage}
+        imageUrl={selectedImage || ''}
+        onClose={() => {
+          setSelectedImage(null);
+          setSelectedPost(null);
+        }}
+        postId={selectedPost?.id}
+      />
     </>
   );
 };
 
 // Helper function to check if user is close to bottom
-const isCloseToBottom = ({ layoutMeasurement, contentOffset, contentSize }) => {
+const isCloseToBottom = ({
+  layoutMeasurement,
+  contentOffset,
+  contentSize
+}: {
+  layoutMeasurement: { height: number };
+  contentOffset: { y: number };
+  contentSize: { height: number };
+}) => {
   const paddingToBottom = 20;
   return layoutMeasurement.height + contentOffset.y >=
     contentSize.height - paddingToBottom;
