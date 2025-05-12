@@ -29,12 +29,14 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useFocusEffect } from "@react-navigation/native";
+import { Video } from "expo-av";
 
 const client = StreamChat.getInstance("cxc6zzq7e93f");
 
 const CustomMessage = () => {
   const { message, isMyMessage } = useMessageContext();
   const [visibleImage, setVisibleImage] = useState<string | null>(null);
+  const [imageDimensions, setImageDimensions] = useState({ width: 200, height: 200 });
   const scaleAnim = useSharedValue(0);
   const opacityAnim = useSharedValue(0);
 
@@ -87,55 +89,88 @@ const CustomMessage = () => {
             className="w-9 h-9 rounded-full mr-2"
           />
         )}
-        <View
-          className={`max-w-[75%] rounded-2xl px-4 py-2 ${
-            isMyMessage ? "bg-blue-500" : "bg-gray-100"
-          }`}
-        >
-          {!isMyMessage && (
-            <Text className="text-sm font-semibold text-gray-800 mb-1">
-              {message.user?.name}
-            </Text>
-          )}
-          {message.text && (
-            <Text
-              className={`text-base ${
-                isMyMessage ? "text-white" : "text-gray-900"
-              }`}
-            >
-              {message.text}
-            </Text>
-          )}
-
-          {message.attachments?.map((attachment, i) => {
-            if (attachment.type === "image" || attachment.image_url) {
+        <View className="max-w-[75%]">
+          <View
+            className={`rounded-2xl  ${
+              isMyMessage ? "bg-blue-500" : "bg-gray-100"
+            }`}
+          >
+            {message.text && (
+              <Text
+                className={`text-base px-4 py-2 ${
+                  isMyMessage ? "text-white" : "text-gray-900"
+                }`}
+              >
+                {message.text}
+              </Text>
+            )}
+            {message.attachments?.map((attachment, i) => {
               const imageUrl = attachment.image_url || attachment.asset_url;
-              return (
-                <TouchableOpacity
-                  key={`${message.id}-${i}`}
-                  onPress={() => setVisibleImage(imageUrl || "")}
-                  activeOpacity={0.9}
-                >
-                  <Image
-                    source={{ uri: imageUrl }}
-                    className="mt-2 rounded-lg"
-                    style={{ height: 200, aspectRatio: 1 }}
-                    resizeMode="cover"
-                  />
-                </TouchableOpacity>
-              );
-            }
-            if (attachment.type === "giphy") {
-              return (
-                <Giphy key={`${message.id}-${i}`} attachment={attachment} />
-              );
-            }
-            return null;
-          })}
 
+              // Handle image attachments
+              if (attachment.type === "image" || imageUrl?.match(/\.(jpeg|jpg|png|gif)$/i)) {
+                useEffect(() => {
+                  if (imageUrl) {
+                    Image.getSize(imageUrl, (width, height) => {
+                      const ratio = height / width;
+                      setImageDimensions({ width: 200, height: 200 * ratio });
+                    });
+                  }
+                }, [imageUrl]);
+
+                return (
+                  <TouchableOpacity
+                    key={`${message.id}-${i}`}
+                    onPress={() => setVisibleImage(imageUrl || "")}
+                    activeOpacity={0.9}
+                    className=""
+                  >
+                    <Image
+                      source={{ uri: imageUrl }}
+                      className="rounded-lg"
+                      style={{
+                        width: imageDimensions.width,
+                        height: imageDimensions.height,
+                      }}
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+                );
+              }
+
+              // Handle video attachments
+              if (
+                attachment.type === "video" ||
+                (imageUrl && imageUrl.match(/\.(mp4|mov|webm)$/i))
+              ) {
+                return (
+                  <View key={`${message.id}-${i}`} className=" rounded-lg overflow-hidden">
+                    <Video
+                      source={{ uri: imageUrl }}
+                      useNativeControls
+                      resizeMode="contain"
+                      style={{
+                        width: 200,
+                        height: 200,
+                        borderRadius: 12,
+                        backgroundColor: "#000",
+                      }}
+                    />
+                  </View>
+                );
+              }
+
+              // Handle giphy
+              if (attachment.type === "giphy") {
+                return <Giphy key={`${message.id}-${i}`} attachment={attachment} />;
+              }
+
+              return null;
+            })}
+          </View>
           <Text
-            className={`text-xs text-right mt-1 ${
-              isMyMessage ? "text-blue-200" : "text-gray-500"
+            className={`text-xs mt-1 ${
+              isMyMessage ? "text-right text-black" : "text-left text-gray-500"
             }`}
           >
             {new Date(message.created_at || "").toLocaleTimeString([], {
@@ -245,7 +280,7 @@ export default function ChannelScreen() {
         </TouchableOpacity>
         {otherUser?.image ? (
           <Image
-            source={{ uri: otherUser.image }}
+            source={{ uri: otherUser.image as string }}
             className="w-10 h-10 rounded-full ml-3 mr-3 border-2 border-white"
           />
         ) : (
@@ -265,13 +300,6 @@ export default function ChannelScreen() {
 
       <MessageList />
       <MessageInput
-        additionalTextInputProps={{
-          accessoryRight: () => (
-            <TouchableOpacity onPress={handleImageUpload} className="ml-2">
-              <Ionicons name="image-outline" size={24} color="#3b82f6" />
-            </TouchableOpacity>
-          ),
-        }}
       />
     </Channel>
   );
