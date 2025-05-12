@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   ActivityIndicator,
   View,
@@ -10,6 +10,8 @@ import {
   Pressable,
   BackHandler,
   StyleSheet,
+  FlatList,
+  TouchableWithoutFeedback,
 } from "react-native";
 import {
   Channel,
@@ -18,6 +20,25 @@ import {
   useMessageContext,
   useMessagesContext,
   useChannelContext,
+  Attachment,
+  FileAttachmentGroup,
+  Gallery,
+  MessageActionListItem,
+  MessageActionListProps,
+  MessageAvatar,
+  MessageMenuProps,
+  MessageReactionPicker,
+  MessageTextContainer,
+  MessageUserReactionsAvatar,
+  MessageUserReactionsProps,
+  Poll,
+  Reaction,
+  Reply,
+  ReplyProps,
+  StreamingMessageView,
+  useChatContext,
+  useFetchReactions,
+  useTranslationContext,
 } from "stream-chat-expo";
 import { StreamChat, Channel as ChannelType } from "stream-chat";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
@@ -33,11 +54,27 @@ import Animated, {
 import { useFocusEffect } from "@react-navigation/native";
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { TapGestureHandler } from "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 const client = StreamChat.getInstance("cxc6zzq7e93f");
 
 // Attachment Components
-const ImageAttachment = ({ attachment, isMyMessage, message, onImagePress }) => {
+interface ImageAttachmentProps {
+  attachment: {
+    image_url?: string;
+    asset_url?: string;
+  };
+  isMyMessage: boolean;
+  message: any;
+  onImagePress: (url: string) => void;
+}
+
+const ImageAttachment: React.FC<ImageAttachmentProps> = ({ 
+  attachment, 
+  isMyMessage, 
+  message, 
+  onImagePress 
+}) => {
   const [imageDimensions, setImageDimensions] = useState({ width: 250, height: 250 });
   const imageUrl = attachment.image_url || attachment.asset_url;
 
@@ -64,7 +101,16 @@ const ImageAttachment = ({ attachment, isMyMessage, message, onImagePress }) => 
   );
 };
 
-const VideoAttachment = ({ attachment, isMyMessage, message }) => {
+interface VideoAttachmentProps {
+  attachment: {
+    image_url?: string;
+    asset_url?: string;
+  };
+  isMyMessage: boolean;
+  message: any;
+}
+
+const VideoAttachment: React.FC<VideoAttachmentProps> = ({ attachment, isMyMessage, message }) => {
   const imageUrl = attachment.image_url || attachment.asset_url;
   const player = useVideoPlayer({ uri: imageUrl }, (player) => {
     player.loop = true;
@@ -86,7 +132,22 @@ const VideoAttachment = ({ attachment, isMyMessage, message }) => {
   );
 };
 
-const GiphyAttachment = ({ attachment, isMyMessage, message, onImagePress }) => {
+interface GiphyAttachmentProps {
+  attachment: {
+    giphy?: {
+      fixed_height?: {
+        url?: string;
+      };
+    };
+    image_url?: string;
+    asset_url?: string;
+  };
+  isMyMessage: boolean;
+  message: any;
+  onImagePress: (url: string) => void;
+}
+
+const GiphyAttachment = ({ attachment, isMyMessage, message, onImagePress }: GiphyAttachmentProps) => {
   const [giphyDimensions, setGiphyDimensions] = useState({ width: 250, height: 250 });
   const giphyUrl = attachment.giphy?.fixed_height?.url || attachment.image_url || attachment.asset_url;
 
@@ -109,14 +170,21 @@ const GiphyAttachment = ({ attachment, isMyMessage, message, onImagePress }) => 
     >
       <Image
         source={{ uri: giphyUrl }}
-        style={{ width: "100%", height: 250 * (giphyUrl ? 1 : 0.5) }}
+        style={{ width: "100%", height: giphyDimensions.height }}
         resizeMode="cover"
       />
     </TouchableOpacity>
   );
 };
 
-const FileAttachment = ({ attachment, isMyMessage }) => {
+interface FileAttachmentProps {
+  attachment: {
+    title?: string;
+  };
+  isMyMessage: boolean;
+}
+
+const FileAttachment = ({ attachment, isMyMessage }: FileAttachmentProps) => {
   return (
     <View
       className={`overflow-hidden rounded-2xl my-1 ${isMyMessage ? "bg-blue-500" : "bg-gray-100"}`}
@@ -142,7 +210,24 @@ const FileAttachment = ({ attachment, isMyMessage }) => {
   );
 };
 
-const AttachmentRenderer = ({ attachment, isMyMessage, message, onImagePress }) => {
+interface AttachmentRendererProps {
+  attachment: {
+    type?: string;
+    image_url?: string;
+    asset_url?: string;
+    title?: string;
+  };
+  isMyMessage: boolean;
+  message: any; // Consider defining a proper type for message
+  onImagePress: (url: string) => void;
+}
+
+const AttachmentRenderer = ({
+  attachment,
+  isMyMessage,
+  message,
+  onImagePress,
+}: AttachmentRendererProps) => {
   const imageUrl = attachment.image_url || attachment.asset_url;
   
   if (attachment.type === "image" || imageUrl?.match(/\.(jpeg|jpg|png|gif)$/i)) {
@@ -191,7 +276,12 @@ const AttachmentRenderer = ({ attachment, isMyMessage, message, onImagePress }) 
 };
 
 // Message timestamp component
-const MessageTimestamp = ({ timestamp, isMyMessage }) => {
+interface MessageTimestampProps {
+  timestamp?: string | number | Date;
+  isMyMessage: boolean;
+}
+
+const MessageTimestamp = ({ timestamp, isMyMessage }: MessageTimestampProps) => {
   if (!timestamp) return null;
   
   const time = new Date(timestamp).toLocaleTimeString([], {
@@ -207,8 +297,18 @@ const MessageTimestamp = ({ timestamp, isMyMessage }) => {
 };
 
 // Message header with sender name for group chats
-const MessageHeader = (props) => {
-  const { message, members } = props;
+interface MessageHeaderProps {
+  message: {
+    user?: {
+      id?: string;
+      name?: string;
+    };
+  };
+  members?: unknown;
+}
+
+const MessageHeader = (props: MessageHeaderProps) => {
+  const { message } = props;
   const { channel } = useChannelContext();
   const isGroup = Object.keys(channel.state.members).length > 2;
   
@@ -220,15 +320,296 @@ const MessageHeader = (props) => {
   );
 };
 
+const CustomMessageActionsList = (props: MessageActionListProps) => {
+  const { messageActions } = props;
+  
+  return (
+    <View className="bg-white rounded-lg p-4 shadow-md w-11/12 max-w-md">
+      {messageActions?.map((action) => (
+        <TouchableOpacity 
+          key={action.title} 
+          className="flex-row items-center py-3 border-b border-gray-100"
+          onPress={action.action}
+        >
+          <View className="w-8 h-8 rounded-full bg-blue-50 items-center justify-center mr-3">
+            {action.icon ? (
+              action.icon
+            ) : (
+              <Ionicons name="chatbubble-outline" size={18} color="#3b82f6" />
+            )}
+          </View>
+          <Text className="text-gray-800 text-base">{action.title}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+};
+
+const CustomMessageReactions = (props: MessageUserReactionsProps) => {
+  const { reactions: propReactions, selectedReaction } = props;
+  const { supportedReactions, MessageUserReactionsItem } = useMessagesContext();
+  const { message } = useMessageContext();
+  const { loadNextPage, reactions: fetchedReactions } = useFetchReactions({
+    message,
+    reactionType: selectedReaction,
+    sort: {
+      created_at: -1,
+    },
+  });
+  const { t } = useTranslationContext();
+  
+  const reactions = useMemo(
+    () =>
+      propReactions ||
+      (fetchedReactions.map((reaction) => ({
+        id: reaction.user?.id,
+        image: reaction.user?.image,
+        name: reaction.user?.name,
+        type: reaction.type,
+      })) as Reaction[]),
+    [propReactions, fetchedReactions],
+  );
+
+  const renderItem = ({ item }: { item: Reaction }) => (
+    <View className="w-1/4 py-2">
+      <MessageUserReactionsItem
+        MessageUserReactionsAvatar={MessageUserReactionsAvatar}
+        reaction={item}
+        supportedReactions={supportedReactions ?? []}
+      />
+    </View>
+  );
+
+  const renderHeader = () => (
+    <Text className="text-base font-bold text-center my-4 text-gray-800">
+      {t<string>("Message Reactions")}
+    </Text>
+  );
+
+  return (
+    <View className="bg-white rounded-lg p-4 shadow-md w-11/12 max-w-md max-h-[200px]">
+      <FlatList
+        accessibilityLabel="reaction-flat-list"
+        columnWrapperStyle={{ justifyContent: 'space-evenly' }}
+        contentContainerStyle={{ justifyContent: 'center' }}
+        data={reactions}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={renderHeader}
+        numColumns={4}
+        onEndReached={loadNextPage}
+        renderItem={renderItem}
+      />
+    </View>
+  );
+};
+
+export const CustomMessageMenu = (props: MessageMenuProps) => {
+  const { client } = useChatContext();
+  const {
+    alignment,
+    files,
+    groupStyles,
+    images,
+    message,
+    dismissOverlay,
+    handleReaction,
+    onlyEmojis,
+    otherAttachments,
+    threadList,
+    videos,
+  } = useMessageContext();
+  
+  const {
+    messageContentOrder,
+    messageTextNumberOfLines,
+    isMessageAIGenerated,
+  } = useMessagesContext();
+  
+  const own_reactions =
+    message?.own_reactions?.map((reaction) => reaction.type) || [];
+    
+  const {
+    messageActions,
+    showMessageReactions,
+    selectedReaction,
+    MessageUserReactionsItem,
+  } = props;
+
+  const groupStyle = `${alignment}_${(groupStyles?.[0] || "bottom").toLowerCase()}`;
+  const hasThreadReplies = !!message?.reply_count;
+  
+  const messageHeight = useSharedValue(0);
+  const messageLayout = useSharedValue({ x: 0, y: 0 });
+  const messageWidth = useSharedValue(0);
+
+  return (
+    <View className="flex-1">
+      <Modal onRequestClose={dismissOverlay} transparent visible={true}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <TouchableWithoutFeedback
+            onPress={dismissOverlay}
+            style={{ flex: 1 }}
+          >
+            <View className="flex-1 bg-black/70 justify-center items-center">
+              <MessageReactionPicker
+                dismissOverlay={dismissOverlay}
+                handleReaction={handleReaction}
+                ownReactionTypes={own_reactions}
+              />
+              
+              <Animated.View
+                onLayout={({
+                  nativeEvent: {
+                    layout: { height: layoutHeight, width: layoutWidth, x, y },
+                  },
+                }) => {
+                  messageLayout.value = {
+                    x: alignment === "left" ? x + layoutWidth : x,
+                    y,
+                  };
+                  messageWidth.value = layoutWidth;
+                  messageHeight.value = layoutHeight;
+                }}
+                className={`items-${alignment === "left" ? "start" : "end"} flex-row`}
+              >
+                {alignment === "left" && MessageAvatar && (
+                  <MessageAvatar
+                    {...{ alignment, message, showAvatar: true }}
+                  />
+                )}
+                
+                <View
+                  className={`
+                    rounded-tl-2xl rounded-tr-2xl overflow-hidden my-2
+                    ${onlyEmojis && !message.quoted_message ? "" : "border border-gray-200"}
+                    ${otherAttachments?.length && otherAttachments[0].type === "giphy" && !message.quoted_message 
+                      ? "" 
+                      : otherAttachments?.length ? "bg-blue-50" : 
+                        alignment === "left" ? "bg-white" : "bg-gray-100"}
+                    ${(groupStyle === "left_bottom" || groupStyle === "left_single") && 
+                      (!hasThreadReplies || threadList) ? "rounded-bl-sm" : "rounded-bl-2xl"}
+                    ${(groupStyle === "right_bottom" || groupStyle === "right_single") && 
+                      (!hasThreadReplies || threadList) ? "rounded-br-sm" : "rounded-br-2xl"}
+                  `}
+                  style={
+                    (onlyEmojis && !message.quoted_message) || otherAttachments?.length
+                      ? { borderWidth: 0 }
+                      : {}
+                  }
+                >
+                  {messageContentOrder.map(
+                    (messageContentType, messageContentOrderIndex) => {
+                      switch (messageContentType) {
+                        case "quoted_reply":
+                          return (
+                            message.quoted_message && (
+                              <View
+                                key={`quoted_reply_${messageContentOrderIndex}`}
+                                className="flex-row px-2 pt-2"
+                              >
+                                <Reply
+                                  quotedMessage={
+                                    message.quoted_message as ReplyProps["quotedMessage"]
+                                  }
+                                />
+                              </View>
+                            )
+                          );
+                        case "gallery":
+                          return (
+                            <Gallery
+                              alignment={alignment}
+                              groupStyles={groupStyles}
+                              hasThreadReplies={!!message?.reply_count}
+                              images={images}
+                              key={`gallery_${messageContentOrderIndex}`}
+                              message={message}
+                              threadList={threadList}
+                              videos={videos}
+                            />
+                          );
+                        case "files":
+                          return (
+                            <FileAttachmentGroup
+                              files={files}
+                              key={`file_attachment_group_${messageContentOrderIndex}`}
+                              messageId={message.id}
+                            />
+                          );
+                        case "poll":
+                          const pollId = message.poll_id;
+                          const poll = pollId && client.polls.fromState(pollId);
+                          return poll ? (
+                            <Poll message={message} poll={poll} />
+                          ) : null;
+                        case "ai_text": {
+                          return isMessageAIGenerated?.(message) ? (
+                            <StreamingMessageView
+                              key={`ai_message_text_container_${messageContentOrderIndex}`}
+                              message={message}
+                            />
+                          ) : null;
+                        }
+                        case "attachments":
+                          return otherAttachments?.map(
+                            (attachment, attachmentIndex) => (
+                              <Attachment
+                                attachment={attachment}
+                                key={`${message.id}-${attachmentIndex}`}
+                              />
+                            ),
+                          );
+                        case "text":
+                        default:
+                          return (otherAttachments?.length &&
+                            otherAttachments[0].actions) ||
+                            isMessageAIGenerated?.(message) ? null : (
+                            <MessageTextContainer
+                              key={`message_text_container_${messageContentOrderIndex}`}
+                              messageOverlay
+                              messageTextNumberOfLines={
+                                messageTextNumberOfLines
+                              }
+                              onlyEmojis={onlyEmojis}
+                            />
+                          );
+                      }
+                    },
+                  )}
+                </View>
+              </Animated.View>
+              
+              {showMessageReactions ? (
+                <CustomMessageReactions
+                  message={message}
+                  MessageUserReactionsAvatar={MessageUserReactionsAvatar}
+                  MessageUserReactionsItem={MessageUserReactionsItem}
+                  selectedReaction={selectedReaction}
+                />
+              ) : (
+                <CustomMessageActionsList
+                  dismissOverlay={dismissOverlay}
+                  MessageActionListItem={MessageActionListItem}
+                  messageActions={messageActions}
+                />
+              )}
+            </View>
+          </TouchableWithoutFeedback>
+        </GestureHandlerRootView>
+      </Modal>
+    </View>
+  );
+};
+
 const CustomMessage = () => {
-  const { message, isMyMessage, previousMessageStyles, onLongPress } = useMessageContext();
+  const { message, isMyMessage, groupStyles, onLongPress } = useMessageContext();
   const { handleReaction } = useMessagesContext();
   const [visibleImage, setVisibleImage] = useState<string | null>(null);
   const scaleAnim = useSharedValue(0);
   const opacityAnim = useSharedValue(0);
   
   // Check if message should be grouped
-  const shouldGroupWithPrevious = previousMessageStyles?.groupedByUser;
+  const shouldGroupWithPrevious = groupStyles?.includes('bottom');
 
   useFocusEffect(
     React.useCallback(() => {
@@ -269,9 +650,61 @@ const CustomMessage = () => {
   };
   
   const handleDoubleTap = () => {
-    if (message && message.id) {
+    if (message && message.id && handleReaction) {
       handleReaction(message, 'love');
     }
+  };
+
+  // Display message reactions
+  const renderReactions = () => {
+    if (!message.latest_reactions || message.latest_reactions.length === 0) return null;
+    
+    // Group reactions by type
+    const reactionsByType: {[key: string]: {count: number, own: boolean}} = {};
+    
+    message.latest_reactions.forEach((reaction: any) => {
+      const type = reaction.type;
+      if (!reactionsByType[type]) {
+        reactionsByType[type] = { count: 0, own: false };
+      }
+      reactionsByType[type].count += 1;
+      
+      // Check if this reaction is from the current user
+      if (reaction.user_id === client.userID) {
+        reactionsByType[type].own = true;
+      }
+    });
+    
+    return (
+      <View className={`flex-row ${isMyMessage ? "justify-end" : "justify-start"} mx-4 my-1`}>
+        <View className="flex-row bg-gray-100 rounded-full px-2 py-1">
+          {Object.entries(reactionsByType).map(([type, data]) => (
+            <TouchableOpacity 
+              key={type}
+              onPress={() => handleReaction?.(message, type)}
+              className={`flex-row items-center mx-1 ${data.own ? "bg-blue-100 rounded-lg px-1" : ""}`}
+            >
+              <Text className="text-base mr-1">{getReactionEmoji(type)}</Text>
+              <Text className="text-xs text-gray-600">{data.count}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
+  };
+  
+  // Helper function to convert reaction type to emoji
+  const getReactionEmoji = (type: string) => {
+    const reactions: {[key: string]: string} = {
+      love: "❤️", 
+      like: "👍", 
+      haha: "😂", 
+      wow: "😮", 
+      sad: "😢", 
+      angry: "😠",
+    };
+    
+    return reactions[type] || "👍";
   };
 
   return (
@@ -297,8 +730,8 @@ const CustomMessage = () => {
         {/* Message content */}
         <View className={`${isMyMessage ? "items-end" : "items-start"}`} style={{ maxWidth: '75%' }}>
           {/* Show user name in group chats */}
-          {!shouldGroupWithPrevious && !isMyMessage && (
-            <MessageHeader message={message} />
+          {!shouldGroupWithPrevious && !isMyMessage && message.user && (
+            <MessageHeader message={{ user: { id: message.user.id, name: message.user.name } }} />
           )}
           
           <TapGestureHandler
@@ -352,6 +785,9 @@ const CustomMessage = () => {
           )}
         </View>
       </View>
+
+      {/* Render reactions */}
+      {renderReactions()}
 
       <Modal visible={!!visibleImage} transparent animationType="none">
         <Pressable
@@ -437,17 +873,16 @@ export default function ChannelScreen() {
     <Channel 
       channel={channel}
       MessageSimple={CustomMessage}
-      messageGroupingLimit={60000} // 1 minute
+      MessageMenu={CustomMessageMenu}
       enableMessageGroupingByUser
       keyboardVerticalOffset={0}
       deletedMessagesVisibilityType="sender"
-      forceAlignMessages={null}
+      forceAlignMessages={false}
       additionalTextInputProps={{
         placeholder: "Type a message...",
         placeholderTextColor: "#9ca3af",
         style: { fontSize: 16 }
       }}
-      MessageHeader={MessageHeader}
     >
       <Stack.Screen options={{ title: otherUser?.name || "Chat", headerShown: false }} />
       
