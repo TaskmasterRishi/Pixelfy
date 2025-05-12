@@ -16,6 +16,8 @@ import {
   MessageList,
   MessageInput,
   useMessageContext,
+  useMessagesContext,
+  useChannelContext,
 } from "stream-chat-expo";
 import { StreamChat, Channel as ChannelType } from "stream-chat";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
@@ -30,15 +32,203 @@ import Animated, {
 } from "react-native-reanimated";
 import { useFocusEffect } from "@react-navigation/native";
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { TapGestureHandler } from "react-native-gesture-handler";
 
 const client = StreamChat.getInstance("cxc6zzq7e93f");
 
-const CustomMessage = () => {
-  const { message, isMyMessage } = useMessageContext();
-  const [visibleImage, setVisibleImage] = useState<string | null>(null);
+// Attachment Components
+const ImageAttachment = ({ attachment, isMyMessage, message, onImagePress }) => {
   const [imageDimensions, setImageDimensions] = useState({ width: 250, height: 250 });
+  const imageUrl = attachment.image_url || attachment.asset_url;
+
+  useEffect(() => {
+    if (imageUrl) {
+      Image.getSize(imageUrl, (width, height) => {
+        setImageDimensions({ width: 250, height: 250 * (height / width) });
+      });
+    }
+  }, [imageUrl]);
+
+  return (
+    <TouchableOpacity
+      onPress={() => onImagePress(imageUrl || "")}
+      activeOpacity={0.9}
+      className="overflow-hidden rounded-2xl my-1"
+    >
+      <Image
+        source={{ uri: imageUrl }}
+        style={imageDimensions}
+        resizeMode="cover"
+      />
+    </TouchableOpacity>
+  );
+};
+
+const VideoAttachment = ({ attachment, isMyMessage, message }) => {
+  const imageUrl = attachment.image_url || attachment.asset_url;
+  const player = useVideoPlayer({ uri: imageUrl }, (player) => {
+    player.loop = true;
+    player.play();
+  });
+
+  return (
+    <View 
+      className="overflow-hidden rounded-2xl my-1 bg-black"
+      style={{ width: 250, height: 250 }}
+    >
+      <VideoView
+        style={{ width: 250, height: 250 }}
+        player={player}
+        allowsFullscreen
+        allowsPictureInPicture
+      />
+    </View>
+  );
+};
+
+const GiphyAttachment = ({ attachment, isMyMessage, message, onImagePress }) => {
+  const [giphyDimensions, setGiphyDimensions] = useState({ width: 250, height: 250 });
+  const giphyUrl = attachment.giphy?.fixed_height?.url || attachment.image_url || attachment.asset_url;
+
+  useEffect(() => {
+    if (giphyUrl) {
+      Image.getSize(giphyUrl, (width, height) => {
+        setGiphyDimensions({ width: 250, height: 250 * (height / width) });
+      });
+    }
+  }, [giphyUrl]);
+
+  if (!giphyUrl) return null;
+
+  return (
+    <TouchableOpacity
+      onPress={() => onImagePress(giphyUrl)}
+      activeOpacity={0.9}
+      className="overflow-hidden rounded-2xl my-1"
+      style={{ width: 250 }}
+    >
+      <Image
+        source={{ uri: giphyUrl }}
+        style={{ width: "100%", height: 250 * (giphyUrl ? 1 : 0.5) }}
+        resizeMode="cover"
+      />
+    </TouchableOpacity>
+  );
+};
+
+const FileAttachment = ({ attachment, isMyMessage }) => {
+  return (
+    <View
+      className={`overflow-hidden rounded-2xl my-1 ${isMyMessage ? "bg-blue-500" : "bg-gray-100"}`}
+      style={{ width: 250 }}
+    >
+      <TouchableOpacity 
+        className="flex-row items-center p-3"
+        activeOpacity={0.7}
+      >
+        <Ionicons 
+          name="document-outline" 
+          size={24} 
+          color={isMyMessage ? "#fff" : "#4b5563"} 
+        />
+        <Text 
+          className={`ml-2 ${isMyMessage ? "text-white" : "text-gray-800"}`}
+          numberOfLines={1}
+        >
+          {attachment.title || "File"}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const AttachmentRenderer = ({ attachment, isMyMessage, message, onImagePress }) => {
+  const imageUrl = attachment.image_url || attachment.asset_url;
+  
+  if (attachment.type === "image" || imageUrl?.match(/\.(jpeg|jpg|png|gif)$/i)) {
+    return (
+      <ImageAttachment 
+        attachment={attachment} 
+        isMyMessage={isMyMessage} 
+        message={message} 
+        onImagePress={onImagePress} 
+      />
+    );
+  }
+  
+  if (attachment.type === "video" || (imageUrl && imageUrl.match(/\.(mp4|mov|webm)$/i))) {
+    if (!imageUrl) return null;
+    return (
+      <VideoAttachment 
+        attachment={attachment} 
+        isMyMessage={isMyMessage} 
+        message={message} 
+      />
+    );
+  }
+  
+  if (attachment.type === "giphy") {
+    return (
+      <GiphyAttachment 
+        attachment={attachment} 
+        isMyMessage={isMyMessage} 
+        message={message} 
+        onImagePress={onImagePress} 
+      />
+    );
+  }
+  
+  if (attachment.type === "file") {
+    return (
+      <FileAttachment
+        attachment={attachment}
+        isMyMessage={isMyMessage}
+      />
+    );
+  }
+  
+  return null;
+};
+
+// Message timestamp component
+const MessageTimestamp = ({ timestamp, isMyMessage }) => {
+  if (!timestamp) return null;
+  
+  const time = new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  
+  return (
+    <Text className={`text-xs mt-1 ${isMyMessage ? "text-right text-gray-500" : "text-left text-gray-500"}`}>
+      {time}
+    </Text>
+  );
+};
+
+// Message header with sender name for group chats
+const MessageHeader = (props) => {
+  const { message, members } = props;
+  const { channel } = useChannelContext();
+  const isGroup = Object.keys(channel.state.members).length > 2;
+  
+  // Only show headers for other users' messages in group chats
+  if (!isGroup || !message?.user?.name || message?.user?.id === client.userID) return null;
+  
+  return (
+    <Text className="text-sm text-gray-500 mb-1">{message.user.name}</Text>
+  );
+};
+
+const CustomMessage = () => {
+  const { message, isMyMessage, previousMessageStyles, onLongPress } = useMessageContext();
+  const { handleReaction } = useMessagesContext();
+  const [visibleImage, setVisibleImage] = useState<string | null>(null);
   const scaleAnim = useSharedValue(0);
   const opacityAnim = useSharedValue(0);
+  
+  // Check if message should be grouped
+  const shouldGroupWithPrevious = previousMessageStyles?.groupedByUser;
 
   useFocusEffect(
     React.useCallback(() => {
@@ -74,173 +264,98 @@ const CustomMessage = () => {
     opacity: opacityAnim.value,
   }));
 
+  const handleImagePress = (imageUrl: string) => {
+    setVisibleImage(imageUrl);
+  };
+  
+  const handleDoubleTap = () => {
+    if (message && message.id) {
+      handleReaction(message, 'love');
+    }
+  };
+
   return (
     <>
-      <View className={`flex-row mb-3 px-4 ${isMyMessage ? "justify-end" : "justify-start"}`}>
+      <View className={`flex-row px-4 ${isMyMessage ? "justify-end" : "justify-start"}`}
+        style={{ 
+          marginBottom: shouldGroupWithPrevious ? 2 : 8,
+          marginTop: shouldGroupWithPrevious ? 0 : 2 
+        }}
+      >
+        {/* Avatar or spacing placeholder */}
         {!isMyMessage && (
-          <Image
-            source={{ uri: message.user?.image }}
-            className="w-9 h-9 rounded-full mr-2"
-          />
-        )}
-        <View className="max-w-[75%]">
-          {message.text && (
-            <View
-              className={`${isMyMessage ? "bg-blue-500" : "bg-gray-100"}`}
-              style={[
-                {
-                  borderTopLeftRadius: 16,
-                  borderTopRightRadius: 16,
-                  overflow: "hidden",
-                },
-                isMyMessage 
-                  ? { borderBottomLeftRadius: 16 }
-                  : { borderBottomRightRadius: 16 }
-              ]}
-            >
-              <Text className={`text-base px-4 py-2 ${isMyMessage ? "text-white" : "text-gray-900"}`}>
-                {message.text}
-              </Text>
-            </View>
-          )}
-          <View style={{ backgroundColor: "transparent" }}>
-            {message.attachments?.map((attachment, i) => {
-              const imageUrl = attachment.image_url || attachment.asset_url;
-
-              if (attachment.type === "image" || imageUrl?.match(/\.(jpeg|jpg|png|gif)$/i)) {
-                useEffect(() => {
-                  if (imageUrl) {
-                    Image.getSize(imageUrl, (width, height) => {
-                      setImageDimensions({ width: 250, height: 250 * (height / width) });
-                    });
-                  }
-                }, [imageUrl]);
-
-                return (
-                  <View
-                    style={[
-                      {
-                        borderTopLeftRadius: 16,
-                        borderTopRightRadius: 16,
-                        overflow: "hidden",
-                      },
-                      isMyMessage
-                        ? { borderBottomLeftRadius: 16 }
-                        : { borderBottomRightRadius: 16 }
-                    ]}
-                    key={`${message.id}-${i}`}
-                  >
-                    <TouchableOpacity
-                      onPress={() => setVisibleImage(imageUrl || "")}
-                      activeOpacity={0.9}
-                    >
-                      <Image
-                        source={{ uri: imageUrl }}
-                        style={imageDimensions}
-                        resizeMode="cover"
-                      />
-                    </TouchableOpacity>
-                  </View>
-                );
-              }
-
-              if (attachment.type === "video" || (imageUrl && imageUrl.match(/\.(mp4|mov|webm)$/i))) {
-                if (!imageUrl) return null;
-                const player = useVideoPlayer({ uri: imageUrl }, (player) => {
-                  player.loop = true;
-                  player.play();
-                });
-
-                return (
-                  <View
-                    style={[
-                      styles.videoContainer,
-                      {
-                        borderTopLeftRadius: 16,
-                        borderTopRightRadius: 16,
-                      },
-                      isMyMessage
-                        ? { borderBottomLeftRadius: 16 }
-                        : { borderBottomRightRadius: 16 }
-                    ]}
-                    key={`${message.id}-${i}`}
-                  >
-                    <VideoView
-                      style={styles.video}
-                      player={player}
-                      allowsFullscreen
-                      allowsPictureInPicture
-                    />
-                  </View>
-                );
-              }
-
-              if (attachment.type === "giphy") {
-                const giphyUrl = attachment.giphy?.fixed_height?.url || attachment.image_url || attachment.asset_url;
-                if (!giphyUrl) return null;
-
-                // State to store dynamic height based on GIPHY aspect ratio
-                const [giphyDimensions, setGiphyDimensions] = useState({ width: 250, height: 250 });
-
-                useEffect(() => {
-                  if (giphyUrl) {
-                    Image.getSize(giphyUrl, (width, height) => {
-                      // Calculate height based on fixed width (250) and original aspect ratio
-                      setGiphyDimensions({ width: 250, height: 250 * (height / width) });
-                    });
-                  }
-                }, [giphyUrl]);
-
-                return (
-                  <View
-                    style={[
-                      {
-                        width: 250,
-                        height: 250 * (giphyUrl ? 1 : 0.5),
-                        borderTopLeftRadius: 16,
-                        borderTopRightRadius: 16,
-                        overflow: "hidden",
-                      },
-                      isMyMessage
-                        ? { borderBottomLeftRadius: 16 }
-                        : { borderBottomRightRadius: 16 }
-                    ]}
-                    key={`${message.id}-${i}-container`}
-                  >
-                    <TouchableOpacity
-                      onPress={() => setVisibleImage(giphyUrl)}
-                      activeOpacity={0.9}
-                      style={{ flex: 1 }}
-                    >
-                      <Image
-                        source={{ uri: giphyUrl }}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                        }}
-                        resizeMode="cover"
-                      />
-                    </TouchableOpacity>
-                  </View>
-                );
-              }
-              
-
-              return null;
-            })}
+          <View className="w-10 mr-2 items-start justify-start">
+            {!shouldGroupWithPrevious && message.user?.image ? (
+              <Image
+                source={{ uri: message.user?.image }}
+                className="w-8 h-8 rounded-full"
+              />
+            ) : null}
           </View>
-          <Text className={`text-xs mt-1 ${isMyMessage ? "text-right text-black" : "text-left text-gray-500"}`}>
-            {new Date(message.created_at || "").toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </Text>
+        )}
+        
+        {/* Message content */}
+        <View className={`${isMyMessage ? "items-end" : "items-start"}`} style={{ maxWidth: '75%' }}>
+          {/* Show user name in group chats */}
+          {!shouldGroupWithPrevious && !isMyMessage && (
+            <MessageHeader message={message} />
+          )}
+          
+          <TapGestureHandler
+            numberOfTaps={2}
+            onActivated={handleDoubleTap}
+          >
+            <View>
+              {message.text && (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onLongPress={onLongPress}
+                  delayLongPress={500}
+                >
+                  <View
+                    className={`px-4 py-2.5 ${
+                      isMyMessage 
+                        ? "bg-blue-500 rounded-tl-2xl rounded-bl-2xl rounded-tr-sm rounded-br-sm" 
+                        : "bg-gray-100 rounded-tr-2xl rounded-br-2xl rounded-tl-sm rounded-bl-sm"
+                    } ${
+                      shouldGroupWithPrevious 
+                        ? isMyMessage 
+                          ? "rounded-tr-2xl" 
+                          : "rounded-tl-2xl" 
+                        : ""
+                    }`}
+                  >
+                    <Text className={`text-base ${isMyMessage ? "text-white" : "text-gray-900"}`}>
+                      {message.text}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+              
+              {message.attachments?.map((attachment, i) => (
+                <AttachmentRenderer
+                  key={`${message.id}-${i}-${attachment.type || 'attachment'}`}
+                  attachment={attachment}
+                  isMyMessage={isMyMessage}
+                  message={message}
+                  onImagePress={handleImagePress}
+                />
+              ))}
+            </View>
+          </TapGestureHandler>
+          
+          {!shouldGroupWithPrevious && (
+            <MessageTimestamp 
+              timestamp={message.created_at} 
+              isMyMessage={isMyMessage}
+            />
+          )}
         </View>
       </View>
 
       <Modal visible={!!visibleImage} transparent animationType="none">
         <Pressable
-          className="flex-1 bg-black/50 items-center justify-center"
+          className="flex-1 bg-black/70 items-center justify-center"
           onPress={() => setVisibleImage(null)}
         >
           {visibleImage && (
@@ -319,8 +434,24 @@ export default function ChannelScreen() {
   const otherUser = otherMembers[0]?.user;
 
   return (
-    <Channel channel={channel} MessageSimple={CustomMessage} giphyVersion="fixed_height_still">
+    <Channel 
+      channel={channel}
+      MessageSimple={CustomMessage}
+      messageGroupingLimit={60000} // 1 minute
+      enableMessageGroupingByUser
+      keyboardVerticalOffset={0}
+      deletedMessagesVisibilityType="sender"
+      forceAlignMessages={null}
+      additionalTextInputProps={{
+        placeholder: "Type a message...",
+        placeholderTextColor: "#9ca3af",
+        style: { fontSize: 16 }
+      }}
+      MessageHeader={MessageHeader}
+    >
       <Stack.Screen options={{ title: otherUser?.name || "Chat", headerShown: false }} />
+      
+      {/* Header */}
       <View className="flex-row items-center px-4 py-3 bg-white border-b border-gray-100 shadow-sm">
         <TouchableOpacity
           onPress={() => router.back()}
@@ -328,6 +459,7 @@ export default function ChannelScreen() {
         >
           <Ionicons name="arrow-back" size={20} color="#4b5563" />
         </TouchableOpacity>
+        
         {otherUser?.image ? (
           <Image
             source={{ uri: otherUser.image as string }}
@@ -338,6 +470,7 @@ export default function ChannelScreen() {
             <Ionicons name="person" size={20} color="#9ca3af" />
           </View>
         )}
+        
         <View>
           <Text className="text-lg font-semibold text-gray-800">
             {otherUser?.name || otherUser?.id}
@@ -348,9 +481,25 @@ export default function ChannelScreen() {
         </View>
       </View>
 
-      <MessageList />
-      <MessageInput
-      />
+      {/* Message list */}
+      <View className="flex-1 bg-white">
+        <MessageList />
+      </View>
+      
+      {/* Message input with attachment button */}
+      <View className="border-t border-gray-100">
+        <View className="flex-row items-center">
+          <TouchableOpacity 
+            onPress={handleImageUpload}
+            className="p-3 ml-2"
+          >
+            <Ionicons name="image-outline" size={24} color="#3b82f6" />
+          </TouchableOpacity>
+          <View className="flex-1">
+            <MessageInput />
+          </View>
+        </View>
+      </View>
     </Channel>
   );
 }
@@ -365,4 +514,11 @@ const styles = StyleSheet.create({
     width: 250,
     height: 250,
   },
+  fileContainer: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    overflow: 'hidden',
+    marginTop: 4,
+    width: 250,
+  }
 });
