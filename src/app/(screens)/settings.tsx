@@ -158,20 +158,6 @@ const SettingsScreen = () => {
             </View>
             <Feather name="chevron-right" size={20} color="#9ca3af" />
           </TouchableOpacity>
-
-          <TouchableOpacity 
-            className="flex-row items-center p-4 bg-white rounded-lg"
-            onPress={() => router.push('/(screens)/activity-log')}
-          >
-            <View className="w-10 h-10 rounded-full items-center justify-center bg-purple-50">
-              <Feather name="activity" size={20} color="#8b5cf6" />
-            </View>
-            <View className="ml-4 flex-1">
-              <Text className="text-base font-medium">Activity Log</Text>
-              <Text className="text-sm text-gray-500">View your account activity</Text>
-            </View>
-            <Feather name="chevron-right" size={20} color="#9ca3af" />
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -193,31 +179,6 @@ const SettingsScreen = () => {
             <View className="ml-4 flex-1">
               <Text className="text-base font-medium">Help Center</Text>
               <Text className="text-sm text-gray-500">Get help and support</Text>
-            </View>
-            <Feather name="chevron-right" size={20} color="#9ca3af" />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            className="flex-row items-center p-4 bg-white rounded-lg"
-            onPress={() => {
-              setShowOptions(false);
-              router.push({
-                pathname: '/(screens)/report-problem',
-                params: { 
-                  fromSettings: true,
-                  email: 'pixelfyhelp@gmail.com',
-                  subject: 'Issue Report',
-                  body: `Hello Pixelfy Team,\n\nI would like to report the following issue:\n\n[Please describe the issue here]\n\nAdditional Information:\n- Device: [Your device model]\n- OS Version: [Your OS version]\n- App Version: 1.0.0\n\nThank you!`
-                }
-              });
-            }}
-          >
-            <View className="w-10 h-10 rounded-full items-center justify-center bg-red-50">
-              <Feather name="alert-circle" size={20} color="#ef4444" />
-            </View>
-            <View className="ml-4 flex-1">
-              <Text className="text-base font-medium">Report a Problem</Text>
-              <Text className="text-sm text-gray-500">Report a problem to the support team</Text>
             </View>
             <Feather name="chevron-right" size={20} color="#9ca3af" />
           </TouchableOpacity>
