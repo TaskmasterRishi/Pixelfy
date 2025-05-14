@@ -1,147 +1,100 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { forwardRef, useImperativeHandle, useState } from 'react';
 import { TouchableOpacity } from 'react-native';
-import Animated, { 
-  useAnimatedStyle, 
-  withSpring, 
-  withSequence,
-  useSharedValue
-} from 'react-native-reanimated';
 import { AntDesign } from '@expo/vector-icons';
 import { supabase } from '~/lib/supabase';
-import { useAuth } from '~/providers/AuthProvider';
-import { triggerNotification } from '~/Components/NotificationTrigger';
 
 interface LikeButtonProps {
-  isLiked?: boolean;
+  isLiked: boolean;
   postId: string;
   postUserId: string;
-  onLikeChange?: (liked: boolean) => void;
+  userId?: string;
+  onLikeChange: (liked: boolean) => void;
 }
 
-export const checkIfLiked = async (postId: string, userId: string) => {
-  try {
-    if (!userId) {
-      console.error('User not authenticated');
-      return false;
-    }
+export interface LikeButtonRef {
+  handleLikePress: () => Promise<void>;
+}
 
-    const { data, error } = await supabase
-      .from('likes')
-      .select('*')
-      .eq('post_id', postId)
-      .eq('liked_user', userId)
-      .maybeSingle();
+const LikeButton = forwardRef<LikeButtonRef, LikeButtonProps>(
+  ({ isLiked, postId, postUserId, userId, onLikeChange }, ref) => {
+    const [isRequestPending, setIsRequestPending] = useState(false);
 
-    if (error) {
-      throw error;
-    }
-
-    return !!data; // Return true if like exists, false otherwise
-  } catch (error) {
-    console.error('Error checking like status:', error);
-    return false;
-  }
-};
-
-export const handleLike = async ({
-  postId,
-  postUserId,
-  isLiked,
-  onLikeChange,
-  userId
-}: {
-  postId: string;
-  postUserId: string;
-  isLiked: boolean;
-  onLikeChange?: (liked: boolean) => void;
-  userId: string;
-}) => {
-  try {
-    if (!userId) {
-      console.error('User not authenticated');
-      return;
-    }
-
-    const newLikedState = !isLiked;
-    
-    if (newLikedState) {
-      // Like the post
-      const { data, error } = await supabase
-        .from('likes')
-        .insert({
-          post_id: postId,
-          user_id: postUserId,
-          liked_user: userId
-        })
-        .select();
-
-      if (error) throw error;
-
-      // Check if notification already exists
-      const { data: existingNotification } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', postUserId)
-        .eq('sender_id', userId)
-        .eq('post_id', postId)
-        .eq('type', 'like')
-        .maybeSingle();
-
-      if (existingNotification) {
-        // Update existing notification
-        await supabase
-          .from('notifications')
-          .update({ created_at: new Date().toISOString() })
-          .eq('id', existingNotification.id);
-      } else {
-        // Create new notification
-        await supabase
-          .from('notifications')
-          .insert({
-            user_id: postUserId,
-            sender_id: userId,
-            type: 'like',
-            post_id: postId
-          });
+    const handlePress = async () => {
+      if (!userId || isRequestPending) {
+        return;
       }
-    } else {
-      // Unlike the post
-      const { data, error } = await supabase
-        .from('likes')
-        .delete()
-        .eq('post_id', postId)
-        .eq('liked_user', userId)
-        .select();
 
-      if (error) throw error;
+      setIsRequestPending(true);
 
-      // Delete notification for unlike
-      await supabase
-        .from('notifications')
-        .delete()
-        .eq('post_id', postId)
-        .eq('sender_id', userId)
-        .eq('type', 'like');
-    }
+      try {
+        // Check if the like already exists
+        const { data: existingLike, error: fetchError } = await supabase
+          .from('likes')
+          .select('*')
+          .eq('post_id', postId)
+          .eq('user_id', userId)
+          .single();
 
-    if (onLikeChange) {
-      await onLikeChange(newLikedState);
-    }
+        if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116: No rows found
+          console.error('Error fetching like:', fetchError);
+          return;
+        }
 
-    return newLikedState;
+        if (existingLike) {
+          // Unlike: Delete the existing like
+          const { error: deleteError } = await supabase
+            .from('likes')
+            .delete()
+            .eq('post_id', postId)
+            .eq('user_id', userId);
 
-  } catch (error) {
-    console.error('Error in handleLike:', error);
-    return isLiked;
+          if (deleteError) {
+            console.error('Error deleting like:', deleteError);
+            return;
+          }
+
+          // Update the UI
+          onLikeChange(false);
+        } else {
+          // Like: Add a new like
+          const { error: insertError } = await supabase
+            .from('likes')
+            .insert([{ post_id: postId, user_id: userId }]);
+
+          if (insertError) {
+            console.error('Error inserting like:', insertError);
+            return;
+          }
+
+          // Update the UI
+          onLikeChange(true);
+        }
+      } catch (error) {
+        console.error('Error handling like:', error);
+      } finally {
+        setIsRequestPending(false);
+      }
+    };
+
+    // Expose the handlePress function via ref
+    useImperativeHandle(ref, () => ({
+      handleLikePress: handlePress
+    }));
+
+    return (
+      <TouchableOpacity onPress={handlePress}>
+        <AntDesign 
+          name={isLiked ? "heart" : "hearto"} 
+          size={26} 
+          color={isLiked ? "#FF3B30" : "#262626"} 
+        />
+      </TouchableOpacity>
+    );
   }
-};
+);
 
-export const LikeButton = ({ isLiked = false }: { isLiked: boolean }) => {
-  return (
-    <AntDesign 
-      name={isLiked ? "heart" : "hearto"} 
-      size={26} 
-      color={isLiked ? "#FF3B30" : "#262626"} 
-    />
-  );
-};
+// Named export
+export { LikeButton };
+
+// Default export (for backward compatibility)
+export default LikeButton;

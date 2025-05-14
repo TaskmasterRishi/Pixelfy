@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Text, View, TouchableOpacity, useWindowDimensions, Image, ActivityIndicator } from "react-native";
-import { Ionicons, AntDesign, Feather, Entypo } from '@expo/vector-icons';
+import { Ionicons, AntDesign, Feather } from '@expo/vector-icons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { formatDistanceToNow } from "date-fns";
 import Animated, { 
@@ -10,42 +10,40 @@ import Animated, {
   withTiming,
   interpolate,
   useSharedValue,
-  Easing,
   runOnJS
 } from 'react-native-reanimated';
-import { handleLike, LikeButton, checkIfLiked } from './LikeButton';
 import { useAuth } from '~/providers/AuthProvider';
 import { supabase } from '~/lib/supabase';
 import { StyleSheet } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
-import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet';
-import LikesBottomSheet from './LikesBottomSheet';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import Toast from 'react-native-toast-message';
+import { useRouter } from 'expo-router';
+import { LikeButton, LikeButtonRef } from './LikeButton';
 
 interface User {
-  id: string; // UUID
+  id: string;
   username: string;
   full_name: string;
   avatar_url: string | null;
   verified: boolean;
   is_private: boolean;
-  // Other fields are not needed in this component
 }
 
 interface Post {
-  id: string; // UUID
-  user_id: string; // UUID
+  id: string;
+  user_id: string;
   caption: string | null;
   media_url: string;
   media_type: string;
   created_at: string;
   user?: User;
-  // Add likes count from the likes table
   likes_count?: number;
 }
 
 interface PostListItemProps {
   post: Post;
-  onLike?: (postId: string) => void;
   onComment?: (postId: string) => void;
   onShare?: (postId: string) => void;
   onBookmark?: (postId: string) => void;
@@ -56,28 +54,28 @@ interface PostListItemProps {
 
 export default function PostListItem({ 
   post,
-  onLike,
   onComment,
   onShare,
   onBookmark,
   onProfilePress,
   currentUserId,
   onShowLikes
-}: PostListItemProps) {
+}: Omit<PostListItemProps, 'onLike'>) {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const [avatarError, setAvatarError] = useState(false);
-  const [liked, setLiked] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [isLikeRequestPending, setIsLikeRequestPending] = useState(false);
   
-  const [lastTap, setLastTap] = useState(0);
   const heartScale = useSharedValue(0);
-  const likeScale = useSharedValue(1);
   const contentOpacity = useSharedValue(0);
 
   const { user } = useAuth();
 
-  const [likeCount, setLikeCount] = useState(0);
   const [commentCount, setCommentCount] = useState(0);
+  const likeButtonRef = useRef<LikeButtonRef>(null);
 
   const avatarUrl = useMemo(() => {
     return post?.user?.avatar_url && !avatarError
@@ -92,7 +90,6 @@ export default function PostListItem({
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch user information if not available
         if (!post.user) {
           const { data: userData, error: userError } = await supabase
             .from('users')
@@ -105,27 +102,24 @@ export default function PostListItem({
           }
         }
 
-        // Fetch like count
         const { count: likeCount, error: likeError } = await supabase
           .from('likes')
           .select('*', { count: 'exact', head: true })
           .eq('post_id', post.id);
 
         if (!likeError) {
-          setLikeCount(likeCount || 0);
+          setLikeCount(likeCount ?? 0);
         }
 
-        // Fetch comment count
         const { count: commentCount, error: commentError } = await supabase
           .from('comments')
           .select('*', { count: 'exact', head: true })
           .eq('post_id', post.id);
 
         if (!commentError) {
-          setCommentCount(commentCount || 0);
+          setCommentCount(commentCount ?? 0);
         }
 
-        // Check if the post is liked
         if (user) {
           const { count, error } = await supabase
             .from('likes')
@@ -134,7 +128,7 @@ export default function PostListItem({
             .eq('user_id', user.id);
 
           if (!error) {
-            setLiked(count > 0);
+            setLiked((count ?? 0) > 0);
           }
         }
       } catch (error) {
@@ -145,49 +139,16 @@ export default function PostListItem({
     fetchData();
   }, [post.id, post.user_id, user?.id]);
 
-  const handleLikePress = async () => {
-    if (!user) {
-      console.error('User is not authenticated');
-      return; // Exit if user is not defined
-    }
-
-    try {
-      const newLikedState = await handleLike({
-        postId: post.id,
-        postUserId: post.user_id,
-        isLiked: liked,
-        onLikeChange: (newState) => {
-          setLiked(newState);
-          // Fetch the actual like count from the database
-          supabase
-            .from('likes')
-            .select('*', { count: 'exact', head: true })
-            .eq('post_id', post.id)
-            .then(({ count }) => {
-              setLikeCount(count || 0);
-            });
-          onLike?.(post.id);
-        },
-        userId: user.id
-      });
-      setLiked(newLikedState);
-    } catch (error) {
-      console.error('Error handling like:', error);
-    }
-  };
-
   const handleProfilePress = useCallback(() => {
+    if (post?.user?.username) {
+      router.push(`/channel/${post.user.username}`);
+    }
     onProfilePress?.(post.user_id);
-  }, [post.user_id, onProfilePress]);
+  }, [post.user_id, post?.user?.username, onProfilePress]);
 
-  // Animation styles
   const heartAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: heartScale.value }],
     opacity: heartScale.value,
-  }));
-
-  const likeButtonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: likeScale.value }],
   }));
 
   const contentAnimatedStyle = useAnimatedStyle(() => ({
@@ -207,40 +168,52 @@ export default function PostListItem({
     contentOpacity.value = 1;
   }, []);
 
-  const [isCommentsVisible, setIsCommentsVisible] = useState(false);
-
   const handleCommentPress = useCallback(() => {
     onComment?.(post.id);
   }, [onComment, post.id]);
 
-  const handleDoubleTapLike = useCallback(async () => {
-    if (!liked) {
-      try {
-        // Show and animate the heart overlay
-        heartScale.value = 0;
-        heartScale.value = withSequence(
-          withSpring(1, { damping: 4 }),
-          withTiming(1, { duration: 500 }),
-          withTiming(0, { duration: 200 })
-        );
+  const handleLikeCountPress = useCallback(() => {
+    onShowLikes(post.id);
+  }, [post.id, onShowLikes]);
 
-        // Call the like handler
-        await handleLikePress();
-      } catch (error) {
-        console.error('Error during double tap like:', error);
-      }
+  const handleShare = async () => {
+    try {
+      Toast.show({
+        type: 'info',
+        text1: 'Preparing to share...'
+      });
+      
+      const fileUri = FileSystem.documentDirectory + "temp_image.jpg";
+      const { uri } = await FileSystem.downloadAsync(post.media_url, fileUri);
+      await Sharing.shareAsync(uri);
+    } catch (err) {
+      Toast.show({
+        type: 'error',
+        text1: 'Failed to share image'
+      });
+    } finally {
+      FileSystem.deleteAsync(FileSystem.documentDirectory + "temp_image.jpg", { idempotent: true });
     }
-  }, [liked, post.id, post.user_id, onLike, user.id]);
+  };
+
+  const handleDoubleTapLike = useCallback(() => {
+    if (!liked && user && !isLikeRequestPending) {
+      likeButtonRef.current?.handleLikePress();
+      
+      heartScale.value = 0;
+      heartScale.value = withSequence(
+        withSpring(1, { damping: 4 }),
+        withTiming(1, { duration: 500 }),
+        withTiming(0, { duration: 200 })
+      );
+    }
+  }, [liked, user?.id, isLikeRequestPending]);
 
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
     .onStart(() => {
-      runOnJS(handleDoubleTapLike)(); // Use runOnJS to ensure it runs on the JS thread
+      runOnJS(handleDoubleTapLike)();
     });
-
-  const handleLikeCountPress = useCallback(() => {
-    onShowLikes(post.id);
-  }, [post.id, onShowLikes]);
 
   if (!post) {
     return (
@@ -253,7 +226,6 @@ export default function PostListItem({
   return (
     <View>
       <Animated.View className="bg-white" style={contentAnimatedStyle}>
-        {/* Header */}
         <TouchableOpacity 
           className="px-4 py-3 flex-row items-center justify-between"
           onPress={handleProfilePress}
@@ -280,12 +252,8 @@ export default function PostListItem({
               <Text className="text-xs text-gray-500">{timeAgo}</Text>
             </View>
           </View>
-          <TouchableOpacity className="p-2">
-            <Feather name="more-horizontal" size={20} color="#262626" />
-          </TouchableOpacity>
         </TouchableOpacity>
 
-        {/* Image with double tap to like */}
         <GestureDetector gesture={doubleTapGesture}>
           <TouchableOpacity activeOpacity={1}>
             <View className="relative">
@@ -309,12 +277,23 @@ export default function PostListItem({
         <View className="px-4 pt-3 pb-1">
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-4">
-              <TouchableOpacity 
-                onPress={handleLikePress}
-                className="active:opacity-60 flex-row items-center gap-2"
-              >
-                <LikeButton isLiked={liked} />
-              </TouchableOpacity>
+              <LikeButton 
+                ref={likeButtonRef}
+                isLiked={liked}
+                postId={post.id}
+                postUserId={post.user_id}
+                userId={user?.id}
+                onLikeChange={(newLikedState) => {
+                  setLiked(newLikedState);
+                  supabase
+                    .from('likes')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('post_id', post.id)
+                    .then(({ count }) => {
+                      setLikeCount(count ?? 0);
+                    });
+                }}
+              />
               <TouchableOpacity 
                 onPress={handleLikeCountPress}
                 className="active:opacity-60"
@@ -331,7 +310,7 @@ export default function PostListItem({
                 <Text className="text-sm font-semibold text-gray-800">{commentCount}</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                onPress={() => onShare?.(post.id)}
+                onPress={handleShare}
                 className="active:opacity-60"
               >
                 <Animated.View>
@@ -348,7 +327,7 @@ export default function PostListItem({
             </Text>
             {post.caption && (
               <Text className="text-[14px] leading-5 mt-1">
-                <Text className="font-semibold">{post.user.username} </Text>
+                <Text className="font-semibold">{post.user?.username || 'Unknown'} </Text>
                 <Text className="ml-1">{post.caption}</Text>
               </Text>
             )}
@@ -359,7 +338,7 @@ export default function PostListItem({
             onPress={handleCommentPress}
             className="mt-2 mb-1"
           >
-            <Text className="text-gray-500 text-sm">Add a comment...</Text>
+            <Text className="text-gray-500 text-sm">Add a comment</Text>
           </TouchableOpacity>
         </View>
 
