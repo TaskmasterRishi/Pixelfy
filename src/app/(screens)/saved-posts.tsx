@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { supabase } from '~/lib/supabase';
 import { useAuth } from '~/providers/AuthProvider';
 import PostListItem from '~/Components/PostListItem';
+import CommentBottomSheet from '~/Components/CommentBottomSheet';
 
 interface User {
   id: string;
@@ -28,6 +29,9 @@ const SavedPostsScreen = () => {
   const { user } = useAuth();
   const [savedPosts, setSavedPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [commentsPopupVisible, setCommentsPopupVisible] = useState(false);
+  const [selectedCommentPostId, setSelectedCommentPostId] = useState<string | null>(null);
+  const commentSheetRef = React.useRef<any>(null);
 
   useEffect(() => {
     const fetchSavedPosts = async () => {
@@ -58,6 +62,11 @@ const SavedPostsScreen = () => {
     fetchSavedPosts();
   }, [user]);
 
+  const handleCommentPress = useCallback((postId: string) => {
+    setSelectedCommentPostId(postId);
+    setCommentsPopupVisible(true);
+  }, []);
+
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
@@ -66,22 +75,41 @@ const SavedPostsScreen = () => {
     );
   }
 
+  // Ensure selectedCommentPostId is a string before passing to CommentBottomSheet
+  const validCommentPostId = selectedCommentPostId || '';
+
   return (
-    <View className="flex-1 bg-white justify-center pt-20">
-      <View className="flex-row items-center justify-between px-4 pt-4 pb-2 border-b border-gray-200">
-        <Text className="text-xl font-bold">Saved Posts</Text>
-      </View>
-      <FlatList
-        data={savedPosts}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <PostListItem post={item} onShowLikes={() => {}} />}
-        ListEmptyComponent={() => (
-          <View className="flex-1 items-center justify-center">
-            <Text className="text-gray-500">No saved posts yet.</Text>
-          </View>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
+    >
+      <View className="flex-1 bg-white justify-center pt-20">
+        <View className="flex-row items-center justify-between px-4 pt-4 pb-2 border-b border-gray-200">
+          <Text className="text-xl font-bold">Saved Posts</Text>
+        </View>
+        <FlatList
+          data={savedPosts}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <PostListItem post={item} onShowLikes={() => {}} onComment={() => handleCommentPress(item.id)} />}
+          ListEmptyComponent={() => (
+            <View className="flex-1 items-center justify-center">
+              <Text className="text-gray-500">No saved posts yet.</Text>
+            </View>
+          )}
+        />
+        {commentsPopupVisible && (
+          <CommentBottomSheet
+            postId={validCommentPostId}
+            sheetRef={commentSheetRef}
+            visible={commentsPopupVisible}
+            onClose={() => {
+              setCommentsPopupVisible(false);
+              setSelectedCommentPostId(null);
+            }}
+          />
         )}
-      />
-    </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 
