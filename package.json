@@ -48,6 +48,7 @@
     "expo-splash-screen": "~0.29.22",
     "expo-status-bar": "~2.0.1",
     "expo-toast": "^1.0.3",
+    "expo-video": "~2.0.6",
     "lodash": "^4.17.21",
     "moti": "^0.30.0",
     "nativewind": "^4.1.23",
@@ -57,6 +58,7 @@
     "react-icons": "^5.5.0",
     "react-native": "^0.76.8",
     "react-native-device-info": "^14.0.4",
+    "react-native-fast-image": "^8.6.3",
     "react-native-gesture-handler": "~2.20.2",
     "react-native-heroicons": "^4.0.0",
     "react-native-image-filter-kit": "^0.8.0",
@@ -78,8 +80,7 @@
     "stream-chat-expo": "^6.7.4",
     "tailwind-rn": "^4.2.0",
     "twrnc": "^4.7.0",
-    "uuid": "^11.1.0",
-    "expo-video": "~2.0.6"
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
