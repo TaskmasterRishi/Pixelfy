@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { Text, View, TouchableOpacity, useWindowDimensions, Image, ActivityIndicator } from "react-native";
+import { Text, View, TouchableOpacity, useWindowDimensions, Image, ActivityIndicator, Alert } from "react-native";
 import { Ionicons, AntDesign, Feather } from '@expo/vector-icons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { formatDistanceToNow } from "date-fns";
@@ -68,6 +68,7 @@ export default function PostListItem({
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [isLikeRequestPending, setIsLikeRequestPending] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
   
   const heartScale = useSharedValue(0);
   const contentOpacity = useSharedValue(0);
@@ -139,34 +140,22 @@ export default function PostListItem({
     fetchData();
   }, [post.id, post.user_id, user?.id]);
 
-  const handleProfilePress = useCallback(() => {
-    if (post?.user?.username) {
-      router.push(`/channel/${post.user.username}`);
-    }
-    onProfilePress?.(post.user_id);
-  }, [post.user_id, post?.user?.username, onProfilePress]);
+  useEffect(() => {
+    const checkIfSaved = async () => {
+      if (!user) return;
+      const { count, error } = await supabase
+        .from('saved_posts')
+        .select('*', { count: 'exact', head: true })
+        .eq('post_id', post.id)
+        .eq('user_id', user.id);
 
-  const heartAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: heartScale.value }],
-    opacity: heartScale.value,
-  }));
-
-  const contentAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: withTiming(1, { duration: 300 }),
-    transform: [
-      { 
-        translateY: interpolate(
-          contentOpacity.value,
-          [0, 1],
-          [10, 0]
-        )
+      if (!error) {
+        setIsSaved((count ?? 0) > 0);
       }
-    ],
-  }));
+    };
 
-  React.useEffect(() => {
-    contentOpacity.value = 1;
-  }, []);
+    checkIfSaved();
+  }, [post.id, user]);
 
   const handleCommentPress = useCallback(() => {
     onComment?.(post.id);
@@ -215,6 +204,58 @@ export default function PostListItem({
       runOnJS(handleDoubleTapLike)();
     });
 
+  const toggleSavePost = async () => {
+    if (!user) return;
+    try {
+      if (isSaved) {
+        const { error } = await supabase
+          .from('saved_posts')
+          .delete()
+          .eq('post_id', post.id)
+          .eq('user_id', user.id);
+
+        if (error) throw error;
+
+        setIsSaved(false);
+        Alert.alert('Removed', 'Post removed from saved posts');
+      } else {
+        const { error } = await supabase
+          .from('saved_posts')
+          .insert({ user_id: user.id, post_id: post.id });
+
+        if (error) throw error;
+
+        setIsSaved(true);
+        Alert.alert('Saved', 'Post added to saved posts');
+      }
+    } catch (error) {
+      console.error('Error toggling save post:', error);
+      Alert.alert('Error', 'Failed to toggle save post');
+    }
+  };
+
+  const heartAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: heartScale.value }],
+    opacity: heartScale.value,
+  }));
+
+  const contentAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(1, { duration: 300 }),
+    transform: [
+      { 
+        translateY: interpolate(
+          contentOpacity.value,
+          [0, 1],
+          [10, 0]
+        )
+      }
+    ],
+  }));
+
+  React.useEffect(() => {
+    contentOpacity.value = 1;
+  }, []);
+
   if (!post) {
     return (
       <View className="p-4">
@@ -228,7 +269,6 @@ export default function PostListItem({
       <Animated.View className="bg-white" style={contentAnimatedStyle}>
         <TouchableOpacity 
           className="px-4 py-3 flex-row items-center justify-between"
-          onPress={handleProfilePress}
         >
           <View className="flex-row items-center">
             {avatarUrl ? (
@@ -318,6 +358,12 @@ export default function PostListItem({
                 </Animated.View>
               </TouchableOpacity>
             </View>
+            <TouchableOpacity 
+              onPress={toggleSavePost}
+              className="active:opacity-60"
+            >
+              <Feather name="bookmark" size={24} color={isSaved ? "#FFD700" : "#262626"} />
+            </TouchableOpacity>
           </View>
 
           {/* Likes & Caption */}

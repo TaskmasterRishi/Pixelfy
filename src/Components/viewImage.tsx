@@ -31,6 +31,7 @@ interface ViewImageProps {
   onClose: () => void;
   postId?: string;
   initialComments?: Comment[];
+  onBookmarkPress?: () => void;
 }
 
 // Define the shape of data returned from Supabase
@@ -82,7 +83,8 @@ const ViewImage: React.FC<ViewImageProps> = ({
   imageUrl, 
   onClose,
   postId,
-  initialComments = []
+  initialComments = [],
+  onBookmarkPress
 }) => {
   const router = useRouter();
   const [fullScreen, setFullScreen] = useState(false);
