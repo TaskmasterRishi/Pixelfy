@@ -105,6 +105,7 @@ const ViewImage: React.FC<ViewImageProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [contentReady, setContentReady] = useState(true);
   const previousPostId = useRef<string | null>(null);
+  const [isBookmarked, setIsBookmarked] = useState(false);
   
   const cardAnimatedStyle = useAnimatedStyle(() => ({
     opacity: cardOpacity.value,
@@ -360,6 +361,27 @@ const ViewImage: React.FC<ViewImageProps> = ({
     ]);
   };
 
+  const handleBookmarkPress = async () => {
+    if (!postId || !user) return;
+    try {
+      setIsBookmarked(!isBookmarked);
+      const { error } = await supabase
+        .from('saved_posts')
+        .upsert({ user_id: user.id, post_id: postId }, { onConflict: 'user_id' });
+      if (error) throw error;
+      Toast.show({
+        type: 'success',
+        text1: isBookmarked ? 'Post unsaved' : 'Post saved'
+      });
+    } catch (error) {
+      console.error('Error saving post:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Failed to save post'
+      });
+    }
+  };
+
   useEffect(() => {
     optionsPanelY.value = withSpring(showOptions ? 0 : 500, { damping: 15 });
   }, [showOptions]);
@@ -464,8 +486,8 @@ const ViewImage: React.FC<ViewImageProps> = ({
                         <Feather name="send" size={26} color="black" />
                       </TouchableOpacity>
                     </View>
-                    <TouchableOpacity className="p-1">
-                      <Feather name="bookmark" size={26} color="black" />
+                    <TouchableOpacity className="p-1" onPress={handleBookmarkPress}>
+                      <Feather name={isBookmarked ? "bookmark" : "bookmark"} size={26} color="black" />
                     </TouchableOpacity>
                   </View>
                 </View>
