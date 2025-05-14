@@ -32,10 +32,10 @@ const LikeButton = forwardRef<LikeButtonRef, LikeButtonProps>(
           .from('likes')
           .select('*')
           .eq('post_id', postId)
-          .eq('user_id', userId)
+          .eq('liked_user', userId)
           .single();
 
-        if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116: No rows found
+        if (fetchError && fetchError.code !== 'PGRST116') {
           console.error('Error fetching like:', fetchError);
           return;
         }
@@ -46,27 +46,29 @@ const LikeButton = forwardRef<LikeButtonRef, LikeButtonProps>(
             .from('likes')
             .delete()
             .eq('post_id', postId)
-            .eq('user_id', userId);
+            .eq('liked_user', userId);
 
           if (deleteError) {
             console.error('Error deleting like:', deleteError);
             return;
           }
 
-          // Update the UI
           onLikeChange(false);
         } else {
-          // Like: Add a new like
+          // Like: Add a new like with proper relationship
           const { error: insertError } = await supabase
             .from('likes')
-            .insert([{ post_id: postId, user_id: userId }]);
+            .insert([{ 
+              post_id: postId,
+              user_id: postUserId,
+              liked_user: userId
+            }]);
 
           if (insertError) {
             console.error('Error inserting like:', insertError);
             return;
           }
 
-          // Update the UI
           onLikeChange(true);
         }
       } catch (error) {
@@ -76,7 +78,6 @@ const LikeButton = forwardRef<LikeButtonRef, LikeButtonProps>(
       }
     };
 
-    // Expose the handlePress function via ref
     useImperativeHandle(ref, () => ({
       handleLikePress: handlePress
     }));
@@ -93,8 +94,5 @@ const LikeButton = forwardRef<LikeButtonRef, LikeButtonProps>(
   }
 );
 
-// Named export
 export { LikeButton };
-
-// Default export (for backward compatibility)
 export default LikeButton;

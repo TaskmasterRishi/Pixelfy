@@ -125,7 +125,7 @@ export default function PostListItem({
             .from('likes')
             .select('*', { count: 'exact', head: true })
             .eq('post_id', post.id)
-            .eq('user_id', user.id);
+            .eq('liked_user', user.id);
 
           if (!error) {
             setLiked((count ?? 0) > 0);
