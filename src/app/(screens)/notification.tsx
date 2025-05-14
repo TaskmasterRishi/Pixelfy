@@ -15,13 +15,25 @@ import { supabase } from "../../lib/supabase";
 import { FontAwesome } from "@expo/vector-icons";
 import { ToastAndroid } from "react-native";
 import { useNavigation } from '@react-navigation/native';
-import { handleFriendAcceptance, followBack } from "../../Components/AcceptFriend";
+import { handleFriendAcceptance, followBack, rejectFollowRequest } from "../../Components/AcceptFriend";
 import { useRouter } from "expo-router";
 import { sendFriendRequest } from "../../Components/FriendRequest";
 
+interface Notification {
+  id: string;
+  type: string;
+  seen: boolean;
+  created_at: string;
+  sender: {
+    id: string;
+    username: string;
+    avatar_url: string | null;
+  };
+}
+
 // Update NotificationItem props interface
 interface NotificationItemProps {
-  item: any;
+  item: Notification;
   index: number;
   onReject: (notificationId: string, senderId: string) => void;
   fetchNotifications: () => void;
@@ -35,6 +47,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
 }) => {
   const { user } = useAuth();
   const [isFollowing, setIsFollowing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const navigation = useNavigation();
   const router = useRouter();
   const translateY = useRef(new Animated.Value(50)).current;
@@ -58,60 +71,62 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
     if (!item.seen) {
       markAsSeen(item.id);
     }
-    // Remove this navigation since the file doesn't exist
-    // router.push({
-    //   pathname: '/viewProfile',
-    //   params: { userId: item.sender.id }
-    // });
+    
+    // Navigate to user profile
+    router.push({
+      pathname: '/viewProfile',
+      params: { userId: item.sender.id }
+    });
   };
 
   const handleAcceptFollowRequest = async (notificationId: string, senderId: string) => {
+    if (isProcessing || !user?.id) return;
+    
     try {
+      setIsProcessing(true);
       const success = await handleFriendAcceptance(user.id, senderId);
       if (success) {
-        // Only update the existing notification type to friend_accepted
-        const { error } = await supabase
-          .from('notifications')
-          .update({ type: 'friend_accepted' })
-          .eq('id', notificationId);
-
-        if (error) {
-          throw error;
-        }
-
-        // Refresh notifications
+        // The notification will be updated in the backend
+        ToastAndroid.show('Follow request accepted', ToastAndroid.SHORT);
         fetchNotifications();
       }
     } catch (error) {
       console.error('Error accepting follow request:', error);
+      ToastAndroid.show('Failed to accept request', ToastAndroid.SHORT);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const handleFollowBack = async (senderId: string) => {
+    if (isProcessing || !user?.id) return;
+    
     try {
-      const success = await followBack(user.id, senderId);
+      setIsProcessing(true);
+      const { success } = await followBack(user.id, senderId);
       if (success) {
-        // Remove the follow_back notification
-        await supabase
-          .from('notifications')
-          .delete()
-          .eq('id', item.id);
-
-        // Refresh notifications
+        // The notification is handled in the backend
+        ToastAndroid.show('You are now following back', ToastAndroid.SHORT);
         fetchNotifications();
       }
     } catch (error) {
       console.error('Error following back:', error);
+      ToastAndroid.show('Failed to follow back', ToastAndroid.SHORT);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   // Add function to check if following
   const checkIfFollowing = async (senderId: string) => {
+    if (!user?.id) return;
+    
     try {
       const { data, error } = await supabase
         .from('friends')
         .select()
-        .or(`and(user_id.eq.${user.id},friend_id.eq.${senderId}),and(user_id.eq.${senderId},friend_id.eq.${user.id})`)
+        .eq('user_id', user.id)
+        .eq('friend_id', senderId)
         .single();
       
       if (error && error.code !== 'PGRST116') { // PGRST116 is the code for no rows found
@@ -126,10 +141,10 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
   };
 
   useEffect(() => {
-    if (item.type === 'follow_back') {
+    if (item.type === 'follow_back' && user?.id) {
       checkIfFollowing(item.sender.id);
     }
-  }, [item, user.id]);
+  }, [item, user?.id]);
 
   useEffect(() => {
     Animated.sequence([
@@ -150,7 +165,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
   }, [index]);
 
   let action = "";
-  let iconName = "bell";
+  let iconName: any = "bell";
   let iconColor = "#3b82f6";
   
   switch (item.type) {
@@ -160,7 +175,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
       iconColor = "#3b82f6";
       break;
     case "friend_accepted":
-      action = "You accepted the follow request";
+      action = "accepted your follow request";
       iconName = "check-circle";
       iconColor = "#10b981";
       break;
@@ -183,6 +198,11 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
       action = "is following you";
       iconName = "user-plus";
       iconColor = "#3b82f6";
+      break;
+    case "followed_you_back":
+      action = "followed you back";
+      iconName = "exchange";
+      iconColor = "#10b981";
       break;
     default:
       action = "sent you a notification";
@@ -230,26 +250,33 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
             {item.type === "follow_request" && (
               <View className="flex-row gap-2">
                 <Pressable
-                  className="bg-green-500 px-4 py-2 rounded-lg active:bg-green-600 shadow-sm"
+                  className={`bg-green-500 px-4 py-2 rounded-lg ${isProcessing ? 'opacity-50' : 'active:bg-green-600'} shadow-sm`}
                   onPress={() => handleAcceptFollowRequest(item.id, item.sender.id)}
+                  disabled={isProcessing}
                 >
-                  <Text className="text-white text-sm font-medium">Accept</Text>
+                  <Text className="text-white text-sm font-medium">
+                    {isProcessing ? 'Processing...' : 'Accept'}
+                  </Text>
                 </Pressable>
                 <Pressable
-                  className="bg-red-500 px-4 py-2 rounded-lg active:bg-red-600 shadow-sm"
+                  className={`bg-red-500 px-4 py-2 rounded-lg ${isProcessing ? 'opacity-50' : 'active:bg-red-600'} shadow-sm`}
                   onPress={() => onReject(item.id, item.sender.id)}
+                  disabled={isProcessing}
                 >
                   <Text className="text-white text-sm font-medium">Reject</Text>
                 </Pressable>
               </View>
             )}
 
-            {item.type === "follow_back" && (
+            {item.type === "follow_back" && !isFollowing && (
               <Pressable
-                className="bg-blue-500 px-4 py-2 rounded-lg active:bg-blue-600 shadow-sm"
+                className={`bg-blue-500 px-4 py-2 rounded-lg ${isProcessing ? 'opacity-50' : 'active:bg-blue-600'} shadow-sm`}
                 onPress={() => handleFollowBack(item.sender.id)}
+                disabled={isProcessing}
               >
-                <Text className="text-white text-sm font-medium">Follow Back</Text>
+                <Text className="text-white text-sm font-medium">
+                  {isProcessing ? 'Processing...' : 'Follow Back'}
+                </Text>
               </Pressable>
             )}
           </View>
@@ -261,7 +288,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
 
 export default function NotificationScreen() {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all"); // 'all', 'follow_request', 'friend_accepted', 'like', 'comment', 'mention'
   const navigation = useNavigation();
@@ -269,28 +296,22 @@ export default function NotificationScreen() {
   const scaleAnim = useRef(new Animated.Value(0.95)).current; // For scale effect
 
   const handleRejectFollowRequest = async (notificationId: string, senderId: string) => {
+    if (!user?.id) return;
+    
     try {
-      // Update follow request status
-      await supabase
-        .from("follow_requests")
-        .update({ status: "Rejected" })
-        .eq("requester_id", senderId)
-        .eq("target_id", user.id);
-
-      // Update the notification to reflect rejection
-      await supabase
-        .from("notifications")
-        .update({ type: "follow_request_rejected" })
-        .eq("id", notificationId);
-
+      await rejectFollowRequest(user.id, senderId);
       // Refresh notifications
       fetchNotifications();
+      ToastAndroid.show('Follow request rejected', ToastAndroid.SHORT);
     } catch (error) {
       console.error("Error rejecting follow request:", error);
+      ToastAndroid.show('Failed to reject request', ToastAndroid.SHORT);
     }
   };
 
   const fetchNotifications = async () => {
+    if (!user?.id) return;
+    
     try {
       setLoading(true);
       let query = supabase
@@ -313,27 +334,27 @@ export default function NotificationScreen() {
 
       const { data, error } = await query;
 
-      if (!error) {
-        // Mark all fetched notifications as seen
-        const unseenIds = data
-          .filter(n => !n.seen)
-          .map(n => n.id);
+      if (error) throw error;
 
-        if (unseenIds.length > 0) {
-          await supabase
-            .from('notifications')
-            .update({ seen: true })
-            .in('id', unseenIds);
+      // Process the data to match our notification type
+      const processedData: Notification[] = data.map((item: any) => ({
+        id: item.id,
+        type: item.type,
+        seen: item.seen,
+        created_at: item.created_at,
+        sender: {
+          id: item.sender.id,
+          username: item.sender.username,
+          avatar_url: item.sender.avatar_url
         }
+      }));
 
-        const sortedData = data.sort((a, b) => 
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
+      // We'll mark them as seen in the UI, but only update the database when they click
+      const sortedData = processedData.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
 
-        setNotifications(sortedData);
-      } else {
-        console.error("Supabase error:", error);
-      }
+      setNotifications(sortedData || []);
     } catch (error) {
       console.error("Error fetching notifications:", error);
     } finally {
@@ -341,20 +362,9 @@ export default function NotificationScreen() {
     }
   };
 
-  const checkIfFriends = async (senderId: string) => {
-    const { data, error } = await supabase
-      .from("friends")
-      .select("id")
-      .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)
-      .or(`user_id.eq.${senderId},friend_id.eq.${senderId}`)
-      .limit(1);
-
-    return data && data.length > 0; // Return true if they are friends
-  };
-
   useEffect(() => {
     fetchNotifications();
-  }, [filter]);
+  }, [filter, user?.id]);
 
   useEffect(() => {
     // Fade-in animation
@@ -372,7 +382,7 @@ export default function NotificationScreen() {
     }).start();
   }, []);
 
-  const renderNotification = ({ item, index }) => {
+  const renderNotification = ({ item, index }: { item: Notification, index: number }) => {
     return (
       <NotificationItem 
         item={item} 
@@ -402,7 +412,7 @@ export default function NotificationScreen() {
         
         {/* Filter Buttons */}
         <View className="flex-row flex-wrap gap-2">
-          {["all", "follow_request", "friend_accepted", "like", "comment", "mention"].map((f) => (
+          {["all", "follow_request", "friend_accepted", "follow_back", "like", "comment", "mention"].map((f) => (
             <Pressable
               key={f}
               className={`px-4 py-2 rounded-full ${

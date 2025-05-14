@@ -1,30 +1,47 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, TextInput, FlatList, Pressable, Image, Text, Dimensions, ScrollView, ActivityIndicator, Alert, RefreshControl } from 'react-native';
 import { useAuth } from '../../providers/AuthProvider';
 import { supabase } from '../../lib/supabase';
 import { FontAwesome } from '@expo/vector-icons';
 import MasonryList from '@react-native-seoul/masonry-list';
-import { sendFriendRequest } from '~/Components/FriendRequest';
+import { sendFriendRequest, removeFriendRequest } from '~/Components/FriendRequest';
+
 import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
 import ViewImage from '~/Components/viewImage';
 
+interface User {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+  bio: string | null;
+}
+
+interface Post {
+  id: string;
+  media_url: string;
+  media_type: string;
+  user_id: string;
+}
+
+type FollowStatus = 'not_following' | 'requested' | 'following';
+
 export default function SearchPage() {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [publicUsers, setPublicUsers] = useState([]);
+  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [publicUsers, setPublicUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [followStatuses, setFollowStatuses] = useState<Record<string, 'not_following' | 'requested' | 'following'>>({});
+  const [followStatuses, setFollowStatuses] = useState<Record<string, FollowStatus>>({});
   const [isFollowUpdating, setIsFollowUpdating] = useState<Record<string, boolean>>({});
-  const [publicPosts, setPublicPosts] = useState([]);
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [publicPosts, setPublicPosts] = useState<Post[]>([]);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isImageVisible, setIsImageVisible] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [isProfileVisible, setIsProfileVisible] = useState(false);
 
   const fetchPublicUsers = async () => {
+    if (!user?.id) return;
+    
     setIsLoading(true);
     try {
       const { data, error } = await supabase
@@ -35,17 +52,23 @@ export default function SearchPage() {
         .order('created_at', { ascending: false })
         .limit(20);
 
-      if (!error) {
+      if (error) throw error;
+      
+      if (data) {
         setPublicUsers(data);
         fetchFollowStatuses(data.map(user => user.id));
         await fetchPublicPosts(data);
       }
+    } catch (error) {
+      console.error('Error fetching public users:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const fetchFollowStatuses = async (userIds: string[]) => {
+    if (!user?.id) return;
+    
     try {
       // Check friends
       const { data: friendsData } = await supabase
@@ -70,7 +93,7 @@ export default function SearchPage() {
           acc[id] = 'not_following';
         }
         return acc;
-      }, {} as Record<string, 'not_following' | 'requested' | 'following'>);
+      }, {} as Record<string, FollowStatus>);
       
       setFollowStatuses(prev => ({ ...prev, ...statuses }));
     } catch (error) {
@@ -78,7 +101,7 @@ export default function SearchPage() {
     }
   };
 
-  const handleSearch = async (query) => {
+  const handleSearch = async (query: string) => {
     if (query.length > 2) {
       setIsLoading(true);
       try {
@@ -86,12 +109,16 @@ export default function SearchPage() {
           .from('users')
           .select('id, username, avatar_url, bio')
           .ilike('username', `%${query}%`)
-          .neq('id', user.id);
+          .neq('id', user?.id || '');
         
-        if (!error) {
+        if (error) throw error;
+        
+        if (data) {
           setSearchResults(data);
           fetchFollowStatuses(data.map(user => user.id));
         }
+      } catch (error) {
+        console.error('Error searching users:', error);
       } finally {
         setIsLoading(false);
       }
@@ -102,7 +129,7 @@ export default function SearchPage() {
   };
 
   const handleFollow = async (userId: string) => {
-    if (isFollowUpdating[userId]) return;
+    if (!user?.id || isFollowUpdating[userId]) return;
     
     setIsFollowUpdating(prev => ({ ...prev, [userId]: true }));
     
@@ -115,7 +142,7 @@ export default function SearchPage() {
           setFollowStatuses(prev => ({ ...prev, [userId]: 'not_following' }));
         }
       } else {
-        const { success } = await sendFriendRequest(user.id, userId, user.username);
+        const { success } = await sendFriendRequest(user.id, userId, user.email || '');
         if (success) {
           setFollowStatuses(prev => ({ ...prev, [userId]: 'requested' }));
         }
@@ -127,7 +154,7 @@ export default function SearchPage() {
     }
   };
 
-  const fetchPublicPosts = async (users) => {
+  const fetchPublicPosts = async (users: User[]) => {
     try {
       const { data, error } = await supabase
         .from('posts')
@@ -137,7 +164,9 @@ export default function SearchPage() {
         .order('created_at', { ascending: false })
         .limit(20);
 
-      if (!error) {
+      if (error) throw error;
+      
+      if (data) {
         setPublicPosts(data);
       }
     } catch (error) {
@@ -147,7 +176,7 @@ export default function SearchPage() {
 
   useEffect(() => {
     fetchPublicUsers();
-  }, []);
+  }, [user?.id]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -161,14 +190,14 @@ export default function SearchPage() {
     }
   };
 
-  const openUserProfile = (user) => {
+  const openUserProfile = (profileUser: User) => {
     router.push({
       pathname: '/viewProfile',
-      params: { userId: user.id }
+      params: { userId: profileUser.id }
     });
   };
 
-  const renderUserCard = (cardUser) => (
+  const renderUserCard = (cardUser: User) => (
     <Pressable 
       key={cardUser.id} 
       onPress={() => openUserProfile(cardUser)}
@@ -235,7 +264,7 @@ export default function SearchPage() {
     </Pressable>
   );
 
-  const openImage = (imageUrl) => {
+  const openImage = (imageUrl: string) => {
     setSelectedImage(imageUrl);
     setIsImageVisible(true);
   };
@@ -295,7 +324,7 @@ export default function SearchPage() {
               <View className="px-2">
                 <MasonryList
                   data={publicPosts}
-                  renderItem={({ item }) => (
+                  renderItem={({ item, i }: { item: any; i: number }) => (
                     <Pressable onPress={() => openImage(item.media_url)}>
                       <View className="mb-2 rounded-md border border-gray-200 overflow-hidden mx-1">
                         <Image
@@ -308,7 +337,7 @@ export default function SearchPage() {
                       </View>
                     </Pressable>
                   )}
-                  keyExtractor={item => item.id}
+                  keyExtractor={(item: any) => item.id}
                   numColumns={2}
                 />
               </View>

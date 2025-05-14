@@ -14,7 +14,7 @@ import { supabase } from '~/lib/supabase';
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import ViewImage from '~/Components/viewImage';
 import { useAuth } from '~/providers/AuthProvider';
-import { sendFriendRequest } from '~/Components/FriendRequest';
+import { sendFriendRequest, removeFriendRequest } from '~/Components/FriendRequest';
 
 type Post = {
   id: string;
@@ -23,6 +23,16 @@ type Post = {
   created_at: string;
   likes_count: number;
 };
+
+// Define ViewImageProps interface to match what the component expects
+interface ViewImageProps {
+  visible: boolean;
+  imageUrl: string;
+  onClose: () => void;
+  postId?: string;
+  initialComments?: any[];
+  // Add other props as needed, but with optional modifier
+}
 
 const ViewProfile = () => {
   const { userId } = useLocalSearchParams();
@@ -46,6 +56,8 @@ const ViewProfile = () => {
   const [isFollowUpdating, setIsFollowUpdating] = useState(false);
 
   const fetchProfile = async () => {
+    if (!user?.id || !userId) return;
+    
     setIsLoading(true);
     try {
       const [profileResponse, postsResponse, followersResponse, followingResponse, followStatusResponse] = await Promise.all([
@@ -107,10 +119,22 @@ const ViewProfile = () => {
           setFollowStatus('requested');
         }
       } else {
-        setFollowStatus('not_following');
+        // Also check if they're already friends
+        const { data: existingFriendship, error: friendshipError } = await supabase
+          .from('friends')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('friend_id', userId)
+          .single();
+
+        if (!friendshipError && existingFriendship) {
+          setFollowStatus('following');
+        } else {
+          setFollowStatus('not_following');
+        }
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching profile data:', error.message);
     } finally {
       setIsLoading(false);
@@ -136,12 +160,13 @@ const ViewProfile = () => {
   };
 
   const handleFollow = async () => {
-    if (isFollowUpdating) return;
+    if (isFollowUpdating || !user?.id || !userId) return;
+    
     setIsFollowUpdating(true);
     
     try {
       if (followStatus === 'following' || followStatus === 'requested') {
-        const { success } = await removeFriendRequest(user.id, userId, followStatus);
+        const { success } = await removeFriendRequest(user.id, userId.toString(), followStatus);
         if (success) {
           setFollowStatus('not_following');
           if (followStatus === 'following') {
@@ -149,7 +174,8 @@ const ViewProfile = () => {
           }
         }
       } else {
-        const { success } = await sendFriendRequest(user.id, userId, user.username);
+        // Use email instead of username since we don't have username in the user object
+        const { success } = await sendFriendRequest(user.id, userId.toString(), user.email || '');
         if (success) {
           setFollowStatus('requested');
         }
@@ -165,7 +191,7 @@ const ViewProfile = () => {
     if (userId) {
       fetchProfile();
     }
-  }, [userId]);
+  }, [userId, user?.id]);
 
   if (isLoading) {
     return (
@@ -182,18 +208,15 @@ const ViewProfile = () => {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      <ViewImage
-        visible={!!selectedPost}
-        imageUrl={selectedPost?.mediaUrl || ''}
-        postId={selectedPost?.id}
-        onClose={() => setSelectedPost(null)}
-        username={selectedPost?.username}
-        avatarUrl={selectedPost?.avatarUrl}
-        timestamp={selectedPost?.timestamp}
-        caption={selectedPost?.caption}
-        likesCount={selectedPost?.likesCount}
-        initialComments={[]}
-      />
+      {selectedPost && (
+        <ViewImage
+          visible={!!selectedPost}
+          imageUrl={selectedPost.mediaUrl}
+          postId={selectedPost.id}
+          onClose={() => setSelectedPost(null)}
+          initialComments={[]}
+        />
+      )}
       
       <View className="px-4 py-6 bg-white">
         {profile && (
