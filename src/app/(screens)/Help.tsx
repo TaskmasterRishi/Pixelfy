@@ -10,7 +10,7 @@ const HelpScreen = () => {
   const reportPanelY = useSharedValue(500);
 
   const handleSupportEmail = () => {
-    const email = 'pixelfyhelp@gmail.com'; // Already using your Gmail
+    const email = 'pixelfyhelp@gmail.com';
     const subject = encodeURIComponent('Support Request');
     const body = encodeURIComponent(
       'Hello Pixelfy Support Team,\n\n' +
@@ -71,7 +71,7 @@ const HelpScreen = () => {
       icon: 'mail',
       title: 'Contact Support',
       description: 'Get help from our support team',
-      action: handleSupportEmail, // Uses pixelfyhelp@gmail.com
+      action: handleSupportEmail,
       color: '#10b981'
     },
     {
@@ -122,59 +122,6 @@ const HelpScreen = () => {
                 </View>
               </TouchableOpacity>
             ))}
-          </View>
-        </View>
-
-        {/* Popular Topics */}
-        <View className="p-6 bg-gray-50">
-          <Text className="text-xl font-semibold mb-4">Popular Topics</Text>
-          <View className="space-y-2">
-            <TouchableOpacity className="flex-row items-center p-4 bg-white rounded-lg">
-              <MaterialIcons name="account-circle" size={24} color="#3b82f6" />
-              <View className="ml-4 flex-1">
-                <Text className="text-base font-medium">Account Settings</Text>
-                <Text className="text-sm text-gray-500">Manage your profile and privacy</Text>
-              </View>
-              <Feather name="chevron-right" size={20} color="#9ca3af" />
-            </TouchableOpacity>
-
-            <TouchableOpacity className="flex-row items-center p-4 bg-white rounded-lg">
-              <FontAwesome name="lock" size={24} color="#10b981" />
-              <View className="ml-4 flex-1">
-                <Text className="text-base font-medium">Privacy & Security</Text>
-                <Text className="text-sm text-gray-500">Learn how we protect your data</Text>
-              </View>
-              <Feather name="chevron-right" size={20} color="#9ca3af" />
-            </TouchableOpacity>
-
-            <TouchableOpacity className="flex-row items-center p-4 bg-white rounded-lg">
-              <Feather name="camera" size={24} color="#8b5cf6" />
-              <View className="ml-4 flex-1">
-                <Text className="text-base font-medium">Posting Content</Text>
-                <Text className="text-sm text-gray-500">How to share photos and stories</Text>
-              </View>
-              <Feather name="chevron-right" size={20} color="#9ca3af" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Community Section */}
-        <View className="p-6">
-          <Text className="text-xl font-semibold mb-4">Join Our Community</Text>
-          <View className="bg-blue-50 p-6 rounded-lg">
-            <View className="w-full h-40 mb-4 rounded-lg bg-blue-100 items-center justify-center">
-              <Feather name="users" size={48} color="#3b82f6" />
-            </View>
-            <Text className="text-base mb-4">
-              Connect with other Pixelfy users, share tips, and get help from the community.
-            </Text>
-            <TouchableOpacity
-              className="bg-blue-500 px-6 py-3 rounded-full flex-row items-center justify-center"
-              onPress={() => Linking.openURL('https://community.pixelfy.com')}
-            >
-              <Feather name="users" size={18} color="white" />
-              <Text className="text-white font-medium ml-2">Visit Community Forum</Text>
-            </TouchableOpacity>
           </View>
         </View>
 
