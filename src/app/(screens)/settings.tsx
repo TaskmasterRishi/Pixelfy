@@ -4,13 +4,19 @@ import { router } from 'expo-router';
 import { useAuth } from '~/providers/AuthProvider';
 import { supabase } from '~/lib/supabase';
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import CloseFriendsScreen from '~/app/(screens)/closefriend';
 
 const SettingsScreen = () => {
   const { user } = useAuth();
+  if (!user) {
+    // Handle the case where user is undefined, e.g., redirect or show a message
+    return <Text>User not found</Text>; // Example handling
+  }
   const [isPrivate, setIsPrivate] = useState(user?.is_private || false);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [pushNotifications, setPushNotifications] = useState(true);
   const [showOptions, setShowOptions] = useState(false);
+  const [closeFriends, setCloseFriends] = useState<{ id: number; name: string }[]>([]);
 
   const handleTogglePrivacy = async () => {
     const newPrivacy = !isPrivate;
