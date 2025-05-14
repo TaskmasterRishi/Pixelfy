@@ -291,7 +291,13 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
             {currentStory.user.username}
           </Text>
         </View>
-        <TouchableOpacity onPress={onClose} className="p-2">
+        <TouchableOpacity 
+          onPress={(e) => {
+            e.stopPropagation();
+            onClose();
+          }} 
+          className="p-2"
+        >
           <Ionicons name="close" size={28} color="white" />
         </TouchableOpacity>
       </View>
@@ -373,7 +379,7 @@ const StoryViewer = ({ stories, onClose, onNextUser, onPreviousUser }: StoryView
       </View>
 
       {/* Navigation Controls */}
-      <View className="absolute top-0 left-0 right-0 h-[85%] flex-row">
+      <View className="absolute top-32 left-0 right-0 bottom-10 flex-row">
         <TouchableWithoutFeedback 
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
