@@ -654,9 +654,12 @@ export const CustomMessageMenu = (props: MessageMenuProps) => {
                           case "attachments":
                             return otherAttachments?.map(
                               (attachment, attachmentIndex) => (
-                                <Attachment
-                                  attachment={attachment}
+                                <AttachmentRenderer
                                   key={`${message.id}-${attachmentIndex}`}
+                                  attachment={attachment}
+                                  isMyMessage={isMyMessage}
+                                  message={message}
+                                  onImagePress={onImagePress}
                                 />
                               ),
                             );
@@ -906,9 +909,9 @@ const CustomMessage = () => {
               {message.attachments?.map((attachment, i) => (
                 <TouchableOpacity
                   key={`${message.id}-${i}-${attachment.type || 'attachment'}`}
-                  activeOpacity={0.7}
-                  onLongPress={(event) => onLongPress(event)}
+                  onLongPress={onLongPress}
                   delayLongPress={500}
+                  activeOpacity={0.9}
                 >
                   <AttachmentRenderer
                     attachment={attachment}
@@ -990,13 +993,18 @@ export default function ChannelScreen() {
 
       if (!result.canceled && result.assets.length > 0) {
         const img = result.assets[0];
+
+        // Upload the image to Stream
+        const response = await channel.sendImage(img.uri);
+
+        // Use the returned URL in the attachment
         await channel.sendMessage({
           text: "",
           attachments: [
             {
               type: "image",
-              image_url: img.uri,
-              asset_url: img.uri,
+              image_url: response.file, // This is the public URL
+              asset_url: response.file,
             },
           ],
         });
