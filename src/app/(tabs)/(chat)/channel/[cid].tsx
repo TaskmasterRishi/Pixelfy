@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef, useContext } from "react";
 import {
   ActivityIndicator,
   View,
@@ -12,6 +12,7 @@ import {
   StyleSheet,
   FlatList,
   TouchableWithoutFeedback,
+  Dimensions,
 } from "react-native";
 import {
   Channel,
@@ -39,8 +40,10 @@ import {
   useChatContext,
   useFetchReactions,
   useTranslationContext,
+  DefaultStreamChatGenerics,
+  MessagesContextValue,
 } from "stream-chat-expo";
-import { StreamChat, Channel as ChannelType } from "stream-chat";
+import { StreamChat, Channel as ChannelType, DefaultGenerics } from "stream-chat";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { useAuth } from "~/providers/AuthProvider";
 import * as ImagePicker from "expo-image-picker";
@@ -75,7 +78,7 @@ const ImageAttachment: React.FC<ImageAttachmentProps> = ({
   message, 
   onImagePress 
 }) => {
-  const [imageDimensions, setImageDimensions] = useState({ width: 250, height: 250 });
+  const [imageDimensions, setImageDimensions] = useState({ width: 250, height: 250 * (1) });
   const imageUrl = attachment.image_url || attachment.asset_url;
 
   useEffect(() => {
@@ -88,7 +91,8 @@ const ImageAttachment: React.FC<ImageAttachmentProps> = ({
 
   return (
     <TouchableOpacity
-      onPress={() => onImagePress(imageUrl || "")}
+      onLongPress={() => onImagePress(imageUrl || "")}
+      delayLongPress={300}
       activeOpacity={0.9}
       className="overflow-hidden rounded-2xl my-1"
     >
@@ -163,7 +167,8 @@ const GiphyAttachment = ({ attachment, isMyMessage, message, onImagePress }: Gip
 
   return (
     <TouchableOpacity
-      onPress={() => onImagePress(giphyUrl)}
+      onLongPress={() => onImagePress(giphyUrl)}
+      delayLongPress={300}
       activeOpacity={0.9}
       className="overflow-hidden rounded-2xl my-1"
       style={{ width: 250 }}
@@ -218,8 +223,9 @@ interface AttachmentRendererProps {
     title?: string;
   };
   isMyMessage: boolean;
-  message: any; // Consider defining a proper type for message
+  message: any;
   onImagePress: (url: string) => void;
+  onLongPress: () => void;
 }
 
 const AttachmentRenderer = ({
@@ -227,52 +233,65 @@ const AttachmentRenderer = ({
   isMyMessage,
   message,
   onImagePress,
+  onLongPress,
 }: AttachmentRendererProps) => {
   const imageUrl = attachment.image_url || attachment.asset_url;
   
+  let AttachmentComponent = null;
   if (attachment.type === "image" || imageUrl?.match(/\.(jpeg|jpg|png|gif)$/i)) {
-    return (
-      <ImageAttachment 
-        attachment={attachment} 
-        isMyMessage={isMyMessage} 
-        message={message} 
-        onImagePress={onImagePress} 
+    AttachmentComponent = (
+      <ImageAttachment
+        attachment={attachment}
+        isMyMessage={isMyMessage}
+        message={message}
+        onImagePress={onImagePress}
       />
     );
-  }
-  
-  if (attachment.type === "video" || (imageUrl && imageUrl.match(/\.(mp4|mov|webm)$/i))) {
-    if (!imageUrl) return null;
-    return (
-      <VideoAttachment 
-        attachment={attachment} 
-        isMyMessage={isMyMessage} 
-        message={message} 
+  } else if (attachment.type === "video" || (imageUrl && imageUrl.match(/\.(mp4|mov|webm)$/i))) {
+    AttachmentComponent = (
+      <VideoAttachment
+        attachment={attachment}
+        isMyMessage={isMyMessage}
+        message={message}
       />
     );
-  }
-  
-  if (attachment.type === "giphy") {
-    return (
-      <GiphyAttachment 
-        attachment={attachment} 
-        isMyMessage={isMyMessage} 
-        message={message} 
-        onImagePress={onImagePress} 
+  } else if (attachment.type === "giphy") {
+    AttachmentComponent = (
+      <GiphyAttachment
+        attachment={attachment}
+        isMyMessage={isMyMessage}
+        message={message}
+        onImagePress={onImagePress}
       />
     );
-  }
-  
-  if (attachment.type === "file") {
-    return (
+  } else if (attachment.type === "file") {
+    AttachmentComponent = (
       <FileAttachment
         attachment={attachment}
         isMyMessage={isMyMessage}
       />
     );
   }
-  
-  return null;
+
+  return (
+    <View style={{ position: 'relative', marginVertical: 4 }}>
+      <TouchableOpacity
+        onPress={onLongPress}
+        style={{
+          position: 'absolute',
+          top: 2,
+          right: isMyMessage ? 2 : undefined,
+          left: isMyMessage ? undefined : 2,
+          zIndex: 10,
+          padding: 6,
+        }}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Ionicons name="ellipsis-horizontal" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+      {AttachmentComponent}
+    </View>
+  );
 };
 
 // Message timestamp component
@@ -323,9 +342,14 @@ const MessageHeader = (props: MessageHeaderProps) => {
 const CustomMessageActionsList = (props: MessageActionListProps) => {
   const { messageActions } = props;
   
+  // Filter out Edit and Thread actions
+  const filteredActions = messageActions?.filter(
+    (action) => action.title !== "Edit" && action.title !== "Thread"
+  );
+
   return (
     <View className="bg-white rounded-lg p-4 shadow-md w-11/12 max-w-md">
-      {messageActions?.map((action) => (
+      {filteredActions?.map((action) => (
         <TouchableOpacity 
           key={action.title} 
           className="flex-row items-center py-3 border-b border-gray-100"
@@ -512,7 +536,9 @@ export const CustomMessageMenu = (props: MessageMenuProps) => {
     messageContentOrder,
     messageTextNumberOfLines,
     isMessageAIGenerated,
-  } = useMessagesContext();
+  } = useMessagesContext() as MessagesContextValue<DefaultStreamChatGenerics> & {
+    jumpToMessage?: (messageId: string) => void;
+  };
   
   const own_reactions =
     message?.own_reactions?.map((reaction) => reaction.type) || [];
@@ -608,27 +634,34 @@ export const CustomMessageMenu = (props: MessageMenuProps) => {
                                   key={`quoted_reply_${messageContentOrderIndex}`}
                                   className="flex-row px-2 pt-2"
                                 >
-                                  <Reply
-                                    quotedMessage={
-                                      message.quoted_message as ReplyProps["quotedMessage"]
-                                    }
-                                  />
+                                  <TouchableOpacity
+                                    onPress={() => {
+                                      const messagesContext = useMessagesContext() as MessagesContextValue<DefaultStreamChatGenerics> & {
+                                        jumpToMessage?: (messageId: string) => void;
+                                      };
+                                      if (message.quoted_message_id && messagesContext.jumpToMessage) {
+                                        console.log("Jumping to message:", message.quoted_message_id);
+                                        messagesContext.jumpToMessage(message.quoted_message_id);
+                                      } else {
+                                        console.log("jumpToMessage or quoted_message_id missing", { 
+                                          jumpToMessage: messagesContext.jumpToMessage, 
+                                          id: message.quoted_message_id 
+                                        });
+                                      }
+                                    }}
+                                    activeOpacity={0.7}
+                                  >
+                                    <Reply
+                                      quotedMessage={
+                                        message.quoted_message as ReplyProps["quotedMessage"]
+                                      }
+                                    />
+                                  </TouchableOpacity>
                                 </View>
                               )
                             );
                           case "gallery":
-                            return (
-                              <Gallery
-                                alignment={alignment}
-                                groupStyles={groupStyles}
-                                hasThreadReplies={!!message?.reply_count}
-                                images={images}
-                                key={`gallery_${messageContentOrderIndex}`}
-                                message={message}
-                                threadList={threadList}
-                                videos={videos}
-                              />
-                            );
+                            return null;
                           case "files":
                             return (
                               <FileAttachmentGroup
@@ -652,17 +685,7 @@ export const CustomMessageMenu = (props: MessageMenuProps) => {
                             ) : null;
                           }
                           case "attachments":
-                            return otherAttachments?.map(
-                              (attachment, attachmentIndex) => (
-                                <AttachmentRenderer
-                                  key={`${message.id}-${attachmentIndex}`}
-                                  attachment={attachment}
-                                  isMyMessage={isMyMessage}
-                                  message={message}
-                                  onImagePress={onImagePress}
-                                />
-                              ),
-                            );
+                            return null;
                           case "text":
                           default:
                             return (otherAttachments?.length &&
@@ -702,13 +725,94 @@ export const CustomMessageMenu = (props: MessageMenuProps) => {
   );
 };
 
-const CustomMessage = () => {
+// Define the FlatList ref type
+type FlatListRefType = React.RefObject<FlatList<any>>;
+
+// Create a context for the FlatList ref
+const FlatListRefContext = React.createContext<FlatListRefType | null>(null);
+
+// Create a provider component
+export const FlatListRefProvider: React.FC<{
+  children: React.ReactNode;
+  flatListRef: FlatListRefType;
+}> = ({ children, flatListRef }) => {
+  return (
+    <FlatListRefContext.Provider value={flatListRef}>
+      {children}
+    </FlatListRefContext.Provider>
+  );
+};
+
+// Hook to use the FlatList ref
+export const useFlatListRef = () => useContext(FlatListRefContext);
+
+const CustomMessage = ({ setIsUploading }: { setIsUploading?: (value: boolean) => void }) => {
   const { message, isMyMessage, groupStyles, onLongPress } = useMessageContext();
   const { channel } = useChannelContext();
+  const messagesContext = useMessagesContext() as MessagesContextValue<DefaultStreamChatGenerics> & {
+    jumpToMessage?: (messageId: string) => void;
+  };
+  const { jumpToMessage } = messagesContext;
   const [visibleImage, setVisibleImage] = useState<string | null>(null);
   const scaleAnim = useSharedValue(0);
   const opacityAnim = useSharedValue(0);
   const shouldGroupWithPrevious = groupStyles?.includes('bottom');
+  const flatListRef = useFlatListRef();
+  const [isUploading, setIsUploadingState] = useState(false);
+  
+  // Create a ref for this message container
+  const messageRef = useRef<View>(null);
+
+  // Store refs for all messages in a static map
+  // This approach allows us to access any message by ID
+  if (!(CustomMessage as any).messageRefs) {
+    (CustomMessage as any).messageRefs = new Map();
+  }
+
+  // Register this message's ref when component mounts
+  useEffect(() => {
+    if (message.id && messageRef.current) {
+      (CustomMessage as any).messageRefs.set(message.id, messageRef);
+    }
+
+    return () => {
+      // Clean up when component unmounts
+      if (message.id) {
+        (CustomMessage as any).messageRefs.delete(message.id);
+      }
+    };
+  }, [message.id]);
+
+  // Custom function to scroll to a message by ID
+  const scrollToMessage = (messageId: string): boolean => {
+    const targetRef = (CustomMessage as any).messageRefs.get(messageId);
+    if (targetRef?.current) {
+      targetRef.current.measureInWindow((x: number, y: number, width: number, height: number) => {
+        if (flatListRef?.current) {
+          // Calculate the appropriate scroll position
+          // For messages above the current view (negative y)
+          if (y < 0) {
+            const scrollAmount = Math.abs(y) + 100; // Add padding
+            flatListRef.current.scrollToOffset({ 
+              offset: scrollAmount, 
+              animated: true 
+            });
+          } 
+          // For messages below the current view
+          else if (y > Dimensions.get('window').height - height - 100) {
+            const visibleArea = Dimensions.get('window').height;
+            const scrollAmount = y - (visibleArea / 2) + (height / 2);
+            flatListRef.current.scrollToOffset({ 
+              offset: scrollAmount, 
+              animated: true 
+            });
+          }
+        }
+      });
+      return true;
+    }
+    return false;
+  };
 
   useFocusEffect(
     React.useCallback(() => {
@@ -844,18 +948,111 @@ const CustomMessage = () => {
     );
   };
 
+  // Handle quoted message click
+  const handleQuotedMessagePress = () => {
+    if (message.quoted_message_id) {
+      
+      // First try using Stream's built-in jumpToMessage
+      if (jumpToMessage) {
+        jumpToMessage(message.quoted_message_id);
+      } else {
+        // Fallback to our custom implementation
+        const scrolled = scrollToMessage(message.quoted_message_id);
+        
+        // If we couldn't find the message in current view, try to load it
+        if (!scrolled && channel) {
+          // Use client.getMessage instead of queryMessages which doesn't exist on Channel
+          client.getMessage(message.quoted_message_id)
+            .then((response) => {
+              if (response.message) {
+                // Add the message to the state
+                channel.state.addMessagesSorted([response.message]);
+                
+                // Try scrolling again after a short delay
+                setTimeout(() => {
+                  if (message.quoted_message_id) {
+                    scrollToMessage(message.quoted_message_id);
+                  }
+                }, 300);
+              }
+            })
+            .catch((error: Error) => {
+              console.error("Error querying for message:", error);
+            });
+        }
+      }
+    }
+  };
+
+  const handleImageUpload = async () => {
+    if (!channel) return;
+
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== "granted") {
+        Alert.alert("Permission Required", "Please allow access to your media library.");
+        return;
+      }
+
+      setIsUploadingState(true);
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsEditing: true,
+        quality: 1,
+        videoQuality: 1,
+      });
+
+      if (result.canceled || !result.assets[0]) {
+        setIsUploadingState(false);
+        return;
+      }
+
+      const asset = result.assets[0];
+
+      if (asset.type === "video") {
+        const response = await channel.sendFile(asset.uri, "video/mp4");
+        await channel.sendMessage({
+          text: "",
+          attachments: [{
+            type: "video",
+            asset_url: response.file,
+            thumb_url: asset.uri
+          }]
+        });
+      } else {
+        const response = await channel.sendImage(asset.uri);
+        await channel.sendMessage({
+          text: "",
+          attachments: [{
+            type: "image",
+            image_url: response.file,
+            asset_url: response.file
+          }]
+        });
+      }
+    } catch (error) {
+      console.error("Upload failed:", error);
+      Alert.alert("Upload Error", "Failed to upload media.");
+    } finally {
+      setIsUploadingState(false);
+    }
+  };
+
   return (
     <>
-      <View className={`flex-row px-4 ${isMyMessage ? "justify-end" : "justify-start"}`}
-        style={{ 
+      <View 
+        ref={messageRef}
+        className={`flex-row px-4 ${isMyMessage ? "justify-end" : "justify-start"}`}
+        style={{
           marginBottom: shouldGroupWithPrevious ? 2 : 8,
-          marginTop: shouldGroupWithPrevious ? 0 : 8, // Increased top margin to make room for reactions
-          position: 'relative', // Add this to position reactions correctly
+          marginTop: shouldGroupWithPrevious ? 0 : 8,
+          position: 'relative',
         }}
       >
         {/* Render reactions first so they appear on top */}
         {renderReactions()}
-        
+
         {/* Avatar or spacing placeholder */}
         {!isMyMessage && (
           <View className="w-10 mr-2 items-start justify-start">
@@ -867,61 +1064,71 @@ const CustomMessage = () => {
             ) : null}
           </View>
         )}
-        
+
         {/* Message content */}
-        <View className={`${isMyMessage ? "items-end" : "items-start"}`} style={{ maxWidth: '75%' }}>
+        <View className={`${isMyMessage ? "items-end" : "items-start"}`} style={{ maxWidth: '75%', position: 'relative' }}>
           {/* Show user name in group chats */}
           {!shouldGroupWithPrevious && !isMyMessage && message.user && (
             <MessageHeader message={{ user: { id: message.user.id, name: message.user.name } }} />
           )}
           
-          <TapGestureHandler
-            numberOfTaps={2}
-            onActivated={handleDoubleTap}
-          >
-            <View>
-              {message.text && (
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onLongPress={(event) => onLongPress(event)}
-                  delayLongPress={500}
-                >
-                  <View
-                    className={`px-4 py-2.5 ${
-                      isMyMessage 
-                        ? "bg-blue-500 rounded-tl-2xl rounded-bl-2xl rounded-tr-sm rounded-br-sm" 
-                        : "bg-gray-100 rounded-tr-2xl rounded-br-2xl rounded-tl-sm rounded-bl-sm"
-                    } ${
-                      shouldGroupWithPrevious 
-                        ? isMyMessage 
-                          ? "rounded-tr-2xl" 
-                          : "rounded-tl-2xl" 
-                        : ""
-                    }`}
-                  >
-                    <Text className={`text-base ${isMyMessage ? "text-white" : "text-gray-900"}`}>
-                      {message.text}
-                    </Text>
+          {/* Use the default Reply component for quoted messages */}
+          {message.quoted_message && (
+            <TouchableOpacity
+              onPress={handleQuotedMessagePress}
+              activeOpacity={0.7}
+            >
+              <Reply
+                quotedMessage={message.quoted_message as any}
+              />
+            </TouchableOpacity>
+          )}
+          
+          <TapGestureHandler numberOfTaps={2} onActivated={handleDoubleTap}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onLongPress={(event) => {
+                if (onLongPress) onLongPress();
+              }}
+              delayLongPress={500}
+            >
+              <View>
+                {message.text && (
+                  <View>
+                    <View
+                      className={`px-4 py-2.5 ${
+                        isMyMessage
+                          ? "bg-blue-500 rounded-tl-2xl rounded-bl-2xl rounded-tr-sm rounded-br-sm"
+                          : "bg-gray-100 rounded-tr-2xl rounded-br-2xl rounded-tl-sm rounded-bl-sm"
+                      } ${
+                        shouldGroupWithPrevious
+                          ? isMyMessage
+                            ? "rounded-tr-2xl"
+                            : "rounded-tl-2xl"
+                          : ""
+                      }`}
+                    >
+                      <Text className={`text-base ${isMyMessage ? "text-white" : "text-gray-900"}`}>
+                        {message.text}
+                      </Text>
+                    </View>
                   </View>
-                </TouchableOpacity>
-              )}
-              
-              {message.attachments?.map((attachment, i) => (
-                <TouchableOpacity
-                  key={`${message.id}-${i}-${attachment.type || 'attachment'}`}
-                  onLongPress={onLongPress}
-                  delayLongPress={500}
-                  activeOpacity={0.9}
-                >
+                )}
+                
+                {message.attachments?.map((attachment, i) => (
                   <AttachmentRenderer
+                    key={`${message.id}-${i}-${attachment.type || 'attachment'}`}
                     attachment={attachment}
                     isMyMessage={isMyMessage}
                     message={message}
                     onImagePress={handleImagePress}
+                    onLongPress={() => {
+                      if (onLongPress) onLongPress();
+                    }}
                   />
-                </TouchableOpacity>
-              ))}
-            </View>
+                ))}
+              </View>
+            </TouchableOpacity>
           </TapGestureHandler>
           
           {!shouldGroupWithPrevious && (
@@ -957,11 +1164,38 @@ const CustomMessage = () => {
   );
 };
 
+// Static property to store message refs
+CustomMessage.messageRefs = new Map();
+
+const handleDeleteAttachment = async (messageId: string, attachmentId: string) => {
+  if (!channel) return;
+
+  try {
+    // Delete the attachment from the message
+    await channel.deleteAttachment(messageId, attachmentId);
+    
+    // Force a re-render by updating the channel state
+    channel.state.updateLocalMessage(messageId, {
+      attachments: channel.state.messages[messageId]?.attachments?.filter(
+        (a: any) => a.id !== attachmentId
+      ),
+    });
+
+    // Optional: Show a success message
+    Alert.alert("Success", "Attachment deleted successfully!");
+  } catch (err) {
+    console.error("Failed to delete attachment:", err);
+    Alert.alert("Error", "Failed to delete attachment.");
+  }
+};
+
 export default function ChannelScreen() {
   const { cid } = useLocalSearchParams<{ cid: string }>();
   const router = useRouter();
   const { user } = useAuth();
   const [channel, setChannel] = useState<ChannelType | null>(null);
+  const flatListRef = useRef(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // This is the issue - we need to use the format that Stream Chat expects
   // Define the reaction types as plain strings, not objects
@@ -981,37 +1215,52 @@ export default function ChannelScreen() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (permission.status !== "granted") {
-        Alert.alert("Permission Denied", "Access to gallery is needed to send images.");
+        Alert.alert("Permission Required", "Please allow access to your media library.");
         return;
       }
 
+      setIsUploading(true);
+
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsEditing: true,
         quality: 1,
+        videoQuality: 1,
       });
 
-      if (!result.canceled && result.assets.length > 0) {
-        const img = result.assets[0];
+      if (result.canceled || !result.assets[0]) {
+        setIsUploading(false);
+        return;
+      }
 
-        // Upload the image to Stream
-        const response = await channel.sendImage(img.uri);
+      const asset = result.assets[0];
 
-        // Use the returned URL in the attachment
+      if (asset.type === "video") {
+        const response = await channel.sendFile(asset.uri, "video/mp4");
         await channel.sendMessage({
           text: "",
-          attachments: [
-            {
-              type: "image",
-              image_url: response.file, // This is the public URL
-              asset_url: response.file,
-            },
-          ],
+          attachments: [{
+            type: "video",
+            asset_url: response.file,
+            thumb_url: asset.uri
+          }]
+        });
+      } else {
+        const response = await channel.sendImage(asset.uri);
+        await channel.sendMessage({
+          text: "",
+          attachments: [{
+            type: "image",
+            image_url: response.file,
+            asset_url: response.file
+          }]
         });
       }
-    } catch (err) {
-      console.error(err);
-      Alert.alert("Upload Failed", "Could not send the image.");
+    } catch (error) {
+      console.error("Upload failed:", error);
+      Alert.alert("Upload Error", "Failed to upload media.");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -1023,72 +1272,118 @@ export default function ChannelScreen() {
   const otherUser = otherMembers[0]?.user;
 
   return (
-    <Channel 
-      channel={channel}
-      MessageSimple={CustomMessage}
-      MessageMenu={CustomMessageMenu}
-      enableMessageGroupingByUser
-      keyboardVerticalOffset={0}
-      deletedMessagesVisibilityType="sender"
-      forceAlignMessages={false}
-      additionalTextInputProps={{
-        placeholder: "Type a message...",
-        placeholderTextColor: "#9ca3af",
-        style: { fontSize: 16 }
-      }}
-    >
-      <Stack.Screen options={{ title: otherUser?.name || "Chat", headerShown: false }} />
-      
-      {/* Header */}
-      <View className="flex-row items-center px-4 py-3 bg-white border-b border-gray-100 shadow-sm">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          className="p-2 rounded-full bg-gray-100"
-        >
-          <Ionicons name="arrow-back" size={20} color="#4b5563" />
-        </TouchableOpacity>
-        
-        {otherUser?.image ? (
-          <Image
-            source={{ uri: otherUser.image as string }}
-            className="w-10 h-10 rounded-full ml-3 mr-3 border-2 border-white"
-          />
-        ) : (
-          <View className="w-10 h-10 rounded-full bg-gray-100 ml-3 mr-3 items-center justify-center">
-            <Ionicons name="person" size={20} color="#9ca3af" />
-          </View>
+    <FlatListRefProvider flatListRef={flatListRef}>
+      <Channel 
+        channel={channel}
+        MessageSimple={(props) => (
+          <CustomMessage {...props} setIsUploading={setIsUploading} />
         )}
+        MessageMenu={CustomMessageMenu as React.ComponentType<MessageMenuProps<DefaultGenerics>>}
+        enableMessageGroupingByUser
+        keyboardVerticalOffset={0}
+        deletedMessagesVisibilityType="sender"
+        forceAlignMessages={false}
+        doMarkReadRequest={(channel) => {
+          return channel.markRead();
+        }}
+        hideMessagesBefore={new Date(0)}
+        loadChannelAtMessage={message => ({
+          limit: 100,
+        })}
+        additionalTextInputProps={{
+          placeholder: "Type a message...",
+          placeholderTextColor: "#9ca3af",
+          style: { 
+            fontSize: 16,
+            padding: 0,
+            margin: 0,
+          }
+        }}
+      >
+        <Stack.Screen options={{ title: otherUser?.name || "Chat", headerShown: false }} />
         
-        <View>
-          <Text className="text-lg font-semibold text-gray-800">
-            {otherUser?.name || otherUser?.id}
-          </Text>
-          <Text className="text-sm text-gray-500">
-            {otherUser?.online ? "Online" : "Offline"}
-          </Text>
-        </View>
-      </View>
-
-      {/* Message list */}
-      <View className="flex-1 bg-white">
-        <MessageList />
-      </View>
-      
-      {/* Message input with attachment button */}
-      <View className="border-t border-gray-100">
-        <View className="flex-row items-center">
-          <TouchableOpacity 
-            onPress={handleImageUpload}
-            className="p-3 ml-2"
+        {/* Header */}
+        <View className="flex-row items-center px-4 py-3 bg-white border-b border-gray-100 shadow-sm">
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="p-2 rounded-full bg-gray-100"
           >
-            <Ionicons name="image-outline" size={24} color="#3b82f6" />
+            <Ionicons name="arrow-back" size={20} color="#4b5563" />
           </TouchableOpacity>
-          <View className="flex-1">
-            <MessageInput />
+          
+          {otherUser?.image ? (
+            <Image
+              source={{ uri: otherUser.image as string }}
+              className="w-10 h-10 rounded-full ml-3 mr-3 border-2 border-white"
+            />
+          ) : (
+            <View className="w-10 h-10 rounded-full bg-gray-100 ml-3 mr-3 items-center justify-center">
+              <Ionicons name="person" size={20} color="#9ca3af" />
+            </View>
+          )}
+          
+          <View>
+            <Text className="text-lg font-semibold text-gray-800">
+              {otherUser?.name || otherUser?.id}
+            </Text>
+            <Text className="text-sm text-gray-500">
+              {otherUser?.online ? "Online" : "Offline"}
+            </Text>
           </View>
         </View>
-      </View>
-    </Channel>
+
+        {/* Message list */}
+        <View className="flex-1 bg-white">
+          <MessageList 
+            loadMoreThreshold={15}
+            messageSearchToTop={true}
+            maxUnreadCount={100}
+            messageLimit={100}
+            loadingMore={false}
+            disableTypingIndicator={false}
+            initialScrollToFirstUnreadMessage={false}
+            setFlatListRef={(ref) => {
+              flatListRef.current = ref;
+            }}
+          />
+        </View>
+        
+        {/* Message input with attachment button */}
+        <View className="border-t border-gray-100">
+          <View className="flex-row items-center">
+            <TouchableOpacity 
+              onPress={handleImageUpload}
+              className="ml-2"
+            >
+              <Ionicons name="image-outline" size={24} color="#3b82f6" className="px-3"/>
+            </TouchableOpacity>
+            <View className="flex-1">
+              <MessageInput
+                additionalTextInputProps={{
+                  placeholder: "Type a message...",
+                  placeholderTextColor: "#9ca3af",
+                  style: { 
+                    fontSize: 16,
+                    padding: 0,
+                    margin: 0,
+                  }
+                }}
+              />
+            </View>
+          </View>
+        </View>
+      </Channel>
+
+      {/* Uploading Loader Modal */}
+      <Modal visible={isUploading} transparent animationType="fade">
+        <View className="flex-1 bg-black/50 justify-center items-center">
+          <View className="bg-white p-6 rounded-lg items-center">
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text className="mt-4 text-gray-800">Uploading media...</Text>
+          </View>
+        </View>
+      </Modal>
+    </FlatListRefProvider>
   );
 }
 
