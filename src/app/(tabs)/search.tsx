@@ -348,10 +348,13 @@ export default function SearchPage() {
 
       {/* Image Modal */}
       {isImageVisible && selectedImage && (
-        <ViewImage 
-          visible={isImageVisible} 
-          imageUrl={selectedImage} 
-          onClose={() => setIsImageVisible(false)} 
+        <ViewImage
+          visible={isImageVisible}
+          imageUrl={selectedImage}
+          onClose={() => setIsImageVisible(false)}
+          postId={
+            publicPosts.find((post) => post.media_url === selectedImage)?.id
+          } // Pass the postId if available
         />
       )}
       <Toast />

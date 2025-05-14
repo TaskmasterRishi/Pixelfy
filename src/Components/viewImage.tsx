@@ -106,6 +106,7 @@ const ViewImage: React.FC<ViewImageProps> = ({
   const [contentReady, setContentReady] = useState(true);
   const previousPostId = useRef<string | null>(null);
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
   
   const cardAnimatedStyle = useAnimatedStyle(() => ({
     opacity: cardOpacity.value,
@@ -382,6 +383,45 @@ const ViewImage: React.FC<ViewImageProps> = ({
     }
   };
 
+  const toggleSavePost = async () => {
+    if (!postId || !user) return;
+    try {
+      if (isSaved) {
+        const { error } = await supabase
+          .from('saved_posts')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id);
+
+        if (error) throw error;
+
+        setIsSaved(false);
+        Toast.show({
+          type: 'success',
+          text1: 'Post removed from saved posts'
+        });
+      } else {
+        const { error } = await supabase
+          .from('saved_posts')
+          .insert({ user_id: user.id, post_id: postId });
+
+        if (error) throw error;
+
+        setIsSaved(true);
+        Toast.show({
+          type: 'success',
+          text1: 'Post added to saved posts'
+        });
+      }
+    } catch (error) {
+      console.error('Error toggling save post:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Failed to toggle save post'
+      });
+    }
+  };
+
   useEffect(() => {
     optionsPanelY.value = withSpring(showOptions ? 0 : 500, { damping: 15 });
   }, [showOptions]);
@@ -486,8 +526,8 @@ const ViewImage: React.FC<ViewImageProps> = ({
                         <Feather name="send" size={26} color="black" />
                       </TouchableOpacity>
                     </View>
-                    <TouchableOpacity className="p-1" onPress={handleBookmarkPress}>
-                      <Feather name={isBookmarked ? "bookmark" : "bookmark"} size={26} color="black" />
+                    <TouchableOpacity className="p-1" onPress={toggleSavePost}>
+                      <Feather name="bookmark" size={26} color={isSaved ? "#FFD700" : "black"} />
                     </TouchableOpacity>
                   </View>
                 </View>
