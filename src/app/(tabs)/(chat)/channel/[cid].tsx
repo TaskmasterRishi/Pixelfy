@@ -701,12 +701,10 @@ export const CustomMessageMenu = (props: MessageMenuProps) => {
 
 const CustomMessage = () => {
   const { message, isMyMessage, groupStyles, onLongPress } = useMessageContext();
-  const { handleReaction, channel } = useMessagesContext();
+  const { channel } = useChannelContext();
   const [visibleImage, setVisibleImage] = useState<string | null>(null);
   const scaleAnim = useSharedValue(0);
   const opacityAnim = useSharedValue(0);
-  
-  // Check if message should be grouped
   const shouldGroupWithPrevious = groupStyles?.includes('bottom');
 
   useFocusEffect(
@@ -748,8 +746,13 @@ const CustomMessage = () => {
   };
   
   const handleDoubleTap = () => {
-    if (message && message.id && handleReaction) {
-      handleReaction(message, 'love');
+    if (message && message.id && channel) {
+      const hasReaction = message.own_reactions?.some(r => r.type === 'love');
+      if (hasReaction) {
+        channel.deleteReaction(message.id, 'love');
+      } else {
+        channel.sendReaction(message.id, { type: 'love' });
+      }
     }
   };
 
@@ -877,7 +880,7 @@ const CustomMessage = () => {
               {message.text && (
                 <TouchableOpacity
                   activeOpacity={0.7}
-                  onLongPress={onLongPress}
+                  onLongPress={(event) => onLongPress(event)}
                   delayLongPress={500}
                 >
                   <View
@@ -901,13 +904,19 @@ const CustomMessage = () => {
               )}
               
               {message.attachments?.map((attachment, i) => (
-                <AttachmentRenderer
+                <TouchableOpacity
                   key={`${message.id}-${i}-${attachment.type || 'attachment'}`}
-                  attachment={attachment}
-                  isMyMessage={isMyMessage}
-                  message={message}
-                  onImagePress={handleImagePress}
-                />
+                  activeOpacity={0.7}
+                  onLongPress={(event) => onLongPress(event)}
+                  delayLongPress={500}
+                >
+                  <AttachmentRenderer
+                    attachment={attachment}
+                    isMyMessage={isMyMessage}
+                    message={message}
+                    onImagePress={handleImagePress}
+                  />
+                </TouchableOpacity>
               ))}
             </View>
           </TapGestureHandler>
