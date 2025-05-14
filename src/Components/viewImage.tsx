@@ -12,8 +12,6 @@ import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import { deleteImage } from '../lib/cloudinary';
 import Toast from 'react-native-toast-message';
-import { useRouter } from 'expo-router';
-import { LikeButton } from './LikeButton';
 
 interface Comment {
   id: string;
@@ -44,7 +42,6 @@ interface PostDataFromSupabase {
     username: string;
     avatar_url: string | null;
   } | null;
-  user_id: string;
 }
 
 interface CommentDataFromSupabase {
@@ -86,7 +83,6 @@ const ViewImage: React.FC<ViewImageProps> = ({
   initialComments = [],
   onBookmarkPress
 }) => {
-  const router = useRouter();
   const [fullScreen, setFullScreen] = useState(false);
   const [originalWidth, setOriginalWidth] = useState(0);
   const [originalHeight, setOriginalHeight] = useState(0);
@@ -98,7 +94,6 @@ const ViewImage: React.FC<ViewImageProps> = ({
     likesCount: number;
     caption: string | null;
     postId: string | null;
-    userId: string;
   } | null>(null);
   const [comments, setComments] = useState<Comment[]>(initialComments);
   const [showOptions, setShowOptions] = useState(false);
@@ -110,7 +105,8 @@ const ViewImage: React.FC<ViewImageProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [contentReady, setContentReady] = useState(true);
   const previousPostId = useRef<string | null>(null);
-  const [isLiked, setIsLiked] = useState(false);
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
   
   const cardAnimatedStyle = useAnimatedStyle(() => ({
     opacity: cardOpacity.value,
@@ -179,7 +175,7 @@ const ViewImage: React.FC<ViewImageProps> = ({
         const postPromise = supabase
           .from('posts')
           .select(`
-            id, caption, created_at, media_url, user_id,
+            id, caption, created_at, media_url,
             users:user_id (username, avatar_url)
           `)
           .eq('id', postId)
@@ -190,13 +186,6 @@ const ViewImage: React.FC<ViewImageProps> = ({
           .select('id', { count: 'exact' })
           .eq('post_id', postId);
 
-        const userLikePromise = supabase
-          .from('likes')
-          .select('id')
-          .eq('post_id', postId)
-          .eq('liked_user', user?.id)
-          .single();
-
         const commentsPromise = supabase
           .from('comments')
           .select(`
@@ -206,8 +195,8 @@ const ViewImage: React.FC<ViewImageProps> = ({
           .eq('post_id', postId)
           .order('created_at', { ascending: true });
 
-        const [postResult, likesResult, userLikeResult, commentsResult] = await Promise.all([
-          postPromise, likesPromise, userLikePromise, commentsPromise
+        const [postResult, likesResult, commentsResult] = await Promise.all([
+          postPromise, likesPromise, commentsPromise
         ]);
 
         if (!isMounted) return;
@@ -220,16 +209,13 @@ const ViewImage: React.FC<ViewImageProps> = ({
         const likesCount = likesResult.count || 0;
         const typedCommentsData = commentsResult.data as unknown as CommentDataFromSupabase[];
 
-        setIsLiked(!!userLikeResult.data);
-
         setPostData({
           username: typedPostData.users?.username || 'Unknown',
           avatarUrl: typedPostData.users?.avatar_url || null,
           timestamp: typedPostData.created_at ? new Date(typedPostData.created_at) : null,
           likesCount: likesCount,
           caption: typedPostData.caption || null,
-          postId: typedPostData.id,
-          userId: typedPostData.user_id
+          postId: typedPostData.id
         });
 
         setComments(
@@ -264,7 +250,7 @@ const ViewImage: React.FC<ViewImageProps> = ({
     fetchPostData();
     
     return () => { isMounted = false; };
-  }, [postId, visible, user?.id]);
+  }, [postId, visible]);
 
   const pinchHandler = useAnimatedGestureHandler<PinchGestureHandlerGestureEvent, { startScale: number }>({
     onStart: (_, ctx) => { ctx.startScale = scale.value; },
@@ -376,9 +362,75 @@ const ViewImage: React.FC<ViewImageProps> = ({
     ]);
   };
 
-  const handleProfilePress = () => {
-    if (postData?.userId) {
-      router.push(`/viewProfile?userId=${postData.userId}`);
+  const handleBookmarkPress = async () => {
+    if (!postId || !user) return;
+    try {
+      setIsBookmarked(!isBookmarked);
+      const { error } = await supabase
+        .from('saved_posts')
+        .upsert({ user_id: user.id, post_id: postId }, { onConflict: 'user_id' });
+      if (error) throw error;
+      Toast.show({
+        type: 'success',
+        text1: isBookmarked ? 'Post unsaved' : 'Post saved'
+      });
+    } catch (error) {
+      console.error('Error saving post:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Failed to save post'
+      });
+    }
+  };
+
+  const toggleSavePost = async () => {
+    if (!postId || !user) return;
+    try {
+      // Check if the post is already saved
+      const { data: existingSavedPost, error: fetchError } = await supabase
+        .from('saved_posts')
+        .select('*')
+        .eq('post_id', postId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') throw fetchError; // Ignore "no rows found" error
+
+      if (existingSavedPost) {
+        // Post is already saved, so delete it
+        const { error: deleteError } = await supabase
+          .from('saved_posts')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id);
+
+        if (deleteError) throw deleteError;
+
+        setIsSaved(false);
+        Toast.show({
+          type: 'success',
+          text1: 'Post removed from saved posts'
+        });
+      } else {
+        // Post is not saved, so insert it
+        const { error: insertError } = await supabase
+          .from('saved_posts')
+          .insert({ user_id: user.id, post_id: postId });
+
+        if (insertError) throw insertError;
+
+        setIsSaved(true);
+        Toast.show({
+          type: 'success',
+          text1: 'Post added to saved posts'
+        });
+      }
+    } catch (error) {
+      console.error('Error toggling save post:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Failed to toggle save post'
+      });
     }
   };
 
@@ -411,26 +463,22 @@ const ViewImage: React.FC<ViewImageProps> = ({
                   </TouchableOpacity>
                   
                   <View className="flex-row items-center flex-1 ml-12">
-                    <TouchableOpacity onPress={handleProfilePress}>
-                      {postData?.avatarUrl ? (
-                        <Image 
-                          source={{ uri: postData.avatarUrl }} 
-                          className="w-10 h-10 rounded-full"
-                        />
-                      ) : (
-                        <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center">
-                          <Feather name="user" size={20} color="black" />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={handleProfilePress}>
-                      <View className="ml-3">
-                        <Text className="text-black font-semibold text-base">{postData?.username || 'Unknown'}</Text>
-                        <Text className="text-gray-500 text-xs">
-                          {postData?.timestamp ? formatTimeAgo(postData.timestamp) : 'Just now'}
-                        </Text>
+                    {postData?.avatarUrl ? (
+                      <Image 
+                        source={{ uri: postData.avatarUrl }} 
+                        className="w-10 h-10 rounded-full"
+                      />
+                    ) : (
+                      <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center">
+                        <Feather name="user" size={20} color="black" />
                       </View>
-                    </TouchableOpacity>
+                    )}
+                    <View className="ml-3">
+                      <Text className="text-black font-semibold text-base">{postData?.username || 'Unknown'}</Text>
+                      <Text className="text-gray-500 text-xs">
+                        {postData?.timestamp ? formatTimeAgo(postData.timestamp) : 'Just now'}
+                      </Text>
+                    </View>
                   </View>
                   
                   {postData?.username === currentUsername && (
@@ -455,27 +503,20 @@ const ViewImage: React.FC<ViewImageProps> = ({
                       overflow: 'hidden',
                     }}
                   >
-                    {!contentReady ? (
-                      <View className="w-full h-full items-center justify-center">
-                        <ActivityIndicator size="large" color="#0ea5e9" />
-                      </View>
-                    ) : (
-                      <Animated.Image
-                        source={{ uri: imageUrl }}
-                        className="w-full h-full"
-                        style={[
-                          animatedImageStyle,
-                          {
-                            width: '100%',
-                            height: '100%',
-                            maxWidth: '100%',
-                            maxHeight: '100%',
-                          }
-                        ]}
-                        resizeMode="cover"
-                        onLoad={() => setContentReady(true)}
-                      />
-                    )}
+                    <Animated.Image
+                      source={{ uri: imageUrl }}
+                      className="w-full h-full"
+                      style={[
+                        animatedImageStyle,
+                        {
+                          width: '100%',
+                          height: '100%',
+                          maxWidth: '100%',
+                          maxHeight: '100%',
+                        }
+                      ]}
+                      resizeMode="cover"
+                    />
                   </Animated.View>
                 </PinchGestureHandler>
 
@@ -483,16 +524,9 @@ const ViewImage: React.FC<ViewImageProps> = ({
                   <View className="flex-row justify-between items-center mb-3">
                     <View className="flex-row items-center space-x-5">
                       <View className="flex-row items-center">
-                        <LikeButton
-                          isLiked={isLiked}
-                          postId={postData?.postId || ''}
-                          postUserId={postData?.userId || ''}
-                          userId={user?.id}
-                          onLikeChange={(liked) => {
-                            setIsLiked(liked);
-                            setPostData(prev => prev ? { ...prev, likesCount: liked ? prev.likesCount + 1 : prev.likesCount - 1 } : null);
-                          }}
-                        />
+                        <TouchableOpacity className="p-1">
+                          <Feather name="heart" size={26} color="black" />
+                        </TouchableOpacity>
                         <Text className="text-black font-semibold text-sm ml-2">
                           {postData?.likesCount ? postData.likesCount.toLocaleString() + " likes" : "0 likes"}
                         </Text>
@@ -504,6 +538,9 @@ const ViewImage: React.FC<ViewImageProps> = ({
                         <Feather name="send" size={26} color="black" />
                       </TouchableOpacity>
                     </View>
+                    <TouchableOpacity className="p-1" onPress={toggleSavePost}>
+                      <Feather name="bookmark" size={26} color={isSaved ? "#FFD700" : "black"} />
+                    </TouchableOpacity>
                   </View>
                 </View>
               </View>

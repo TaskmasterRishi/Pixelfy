@@ -131,6 +131,16 @@ export default function PostListItem({
           if (!error) {
             setLiked((count ?? 0) > 0);
           }
+
+          const { count: savedCount, error: savedError } = await supabase
+            .from('saved_posts')
+            .select('*', { count: 'exact', head: true })
+            .eq('post_id', post.id)
+            .eq('user_id', user.id);
+
+          if (!savedError) {
+            setIsSaved((savedCount ?? 0) > 0);
+          }
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -139,23 +149,6 @@ export default function PostListItem({
 
     fetchData();
   }, [post.id, post.user_id, user?.id]);
-
-  useEffect(() => {
-    const checkIfSaved = async () => {
-      if (!user) return;
-      const { count, error } = await supabase
-        .from('saved_posts')
-        .select('*', { count: 'exact', head: true })
-        .eq('post_id', post.id)
-        .eq('user_id', user.id);
-
-      if (!error) {
-        setIsSaved((count ?? 0) > 0);
-      }
-    };
-
-    checkIfSaved();
-  }, [post.id, user]);
 
   const handleCommentPress = useCallback(() => {
     onComment?.(post.id);
