@@ -1,22 +1,40 @@
 import { supabase } from '~/lib/supabase';
 
-export const sendFriendRequest = async (requesterId: string, targetId: string) => {
+export const sendFriendRequest = async (requesterId: string, targetId: string, requesterUsername?: string) => {
   if (requesterId === targetId) {
-    throw new Error("You cannot send a friend request to yourself.");
-  }
-
-  // Check for existing requests
-  const { data: existingRequests } = await supabase
-    .from('follow_requests')
-    .select('*')
-    .or(`and(requester_id.eq.${requesterId},target_id.eq.${targetId}),and(requester_id.eq.${targetId},target_id.eq.${requesterId})`)
-    .eq('status', 'Pending');
-
-  if (existingRequests && existingRequests.length > 0) {
-    throw new Error("Friend request already exists or pending.");
+    throw new Error("You cannot send a follow request to yourself.");
   }
 
   try {
+    // Check if already following
+    const { data: existingFriendship, error: friendshipError } = await supabase
+      .from('friends')
+      .select('*')
+      .or(`user_id.eq.${requesterId},user_id.eq.${targetId}`)
+      .or(`friend_id.eq.${targetId},friend_id.eq.${requesterId}`)
+      .maybeSingle();
+
+    if (friendshipError) throw friendshipError;
+    
+    if (existingFriendship) {
+      return { success: false, message: "Already following this user" };
+    }
+
+    // Check for existing pending requests
+    const { data: existingRequests, error: requestsError } = await supabase
+      .from('follow_requests')
+      .select('*')
+      .or(`requester_id.eq.${requesterId},requester_id.eq.${targetId}`)
+      .or(`target_id.eq.${targetId},target_id.eq.${requesterId}`)
+      .eq('status', 'Pending')
+      .maybeSingle();
+
+    if (requestsError) throw requestsError;
+    
+    if (existingRequests) {
+      return { success: false, message: "Request already pending" };
+    }
+
     // Create follow request
     const { error: requestError } = await supabase
       .from('follow_requests')
@@ -28,36 +46,62 @@ export const sendFriendRequest = async (requesterId: string, targetId: string) =
 
     if (requestError) throw requestError;
 
-    // Create notification
+    // Create notification for target user
     const { error: notificationError } = await supabase
       .from('notifications')
       .insert([{
         type: 'follow_request',
         user_id: targetId,
-        sender_id: requesterId
+        sender_id: requesterId,
+        seen: false
       }]);
 
     if (notificationError) throw notificationError;
 
     return { success: true };
   } catch (error) {
-    console.error('Error in FriendRequest:', error);
+    console.error('Error in sendFriendRequest:', error);
     return { success: false, error };
   }
 };
 
-export const deleteFriendRequest = async (requestId: string, userId: string) => {
+export const removeFriendRequest = async (requesterId: string, targetId: string, status?: string) => {
   try {
-    const { error } = await supabase
-      .from('follow_requests')
-      .delete()
-      .eq('id', requestId)
-      .or(`requester_id.eq.${userId},target_id.eq.${userId}`);
+    if (status === 'requested' || !status) {
+      // Delete the follow request
+      const { error: requestError } = await supabase
+        .from('follow_requests')
+        .delete()
+        .or(`requester_id.eq.${requesterId},requester_id.eq.${targetId}`)
+        .or(`target_id.eq.${targetId},target_id.eq.${requesterId}`);
 
-    if (error) throw error;
+      if (requestError) throw requestError;
+
+      // Delete the notification
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('type', 'follow_request')
+        .eq('user_id', targetId)
+        .eq('sender_id', requesterId);
+
+      if (notificationError) throw notificationError;
+    }
+
+    if (status === 'following' || !status) {
+      // Delete from friends table
+      const { error: friendError } = await supabase
+        .from('friends')
+        .delete()
+        .or(`user_id.eq.${requesterId},user_id.eq.${targetId}`)
+        .or(`friend_id.eq.${targetId},friend_id.eq.${requesterId}`);
+
+      if (friendError) throw friendError;
+    }
+
     return { success: true };
   } catch (error) {
-    console.error('Error deleting friend request:', error);
+    console.error('Error in removeFriendRequest:', error);
     return { success: false, error };
   }
 };
