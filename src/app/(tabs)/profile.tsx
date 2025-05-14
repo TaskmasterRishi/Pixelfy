@@ -188,6 +188,22 @@ const ProfileScreen = () => {
     setSelectedPost(post);
   };
 
+  const handleSavePost = async (postId: string) => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from('saved_posts')
+        .insert({ user_id: user.id, post_id: postId });
+
+      if (error) throw error;
+
+      Alert.alert('Success', 'Post saved successfully');
+    } catch (error) {
+      console.error('Error saving post:', error);
+      Alert.alert('Error', 'Failed to save post');
+    }
+  };
+
   if (isLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
@@ -387,6 +403,17 @@ const ProfileScreen = () => {
           </TouchableOpacity>
 
           <TouchableOpacity 
+            onPress={() => {
+              setShowOptions(false);
+              router.push('/(screens)/saved-posts');
+            }}
+            className="flex-row items-center px-6 py-4 border-b border-gray-200"
+          >
+            <Feather name="bookmark" size={24} color="black" />
+            <Text className="ml-4">Saved Posts</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
             onPress={handleLogout}
             className="flex-row items-center px-6 py-4 border-b border-gray-200"
           >
@@ -412,6 +439,11 @@ const ProfileScreen = () => {
           setSelectedPost(null);
         }}
         postId={selectedPost?.id}
+        onBookmarkPress={() => {
+          if (selectedPost?.id) {
+            handleSavePost(selectedPost.id);
+          }
+        }}
       />
     </>
   );
